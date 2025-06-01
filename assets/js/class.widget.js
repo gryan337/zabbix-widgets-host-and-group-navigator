@@ -116,7 +116,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 					}
 
 					this.#selected_groupid = reference_cookie['hostgroupids'][0];
-					if (this.all_group_ids.includes(this.#selected_groupid)) {
+					if (this.all_group_ids?.includes(this.#selected_groupid)) {
 						this.#group_cookie_set = true;
 					}
 
@@ -136,7 +136,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 
 				}
 				catch (error) {
-					console.warn('Invalid JSON for cookie: "references"');
+					console.warn('Invalid JSON for cookie: "references"', error);
 				}
 			}
 		}
