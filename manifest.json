@@ -1,0 +1,45 @@
+{
+	"manifest_version": 2.0,
+	"id": "hostandgrpnavigatorrme",
+	"type": "widget",
+	"name": "Host And Hostgroup Navigator",
+	"namespace": "HostAndGroupNavigator",
+	"version": "1.0",
+	"author": "Ryan Eberly",
+	"description": "Displays host group hierarchy and allows for controlling other widgets with either hostgroup or host selections",
+	"widget": {
+		"size": {
+			"width": 12,
+			"height": 5
+		},
+		"js_class": "CWidgetHostAndGroupNavigator",
+		"in": {
+			"groupids": {
+				"type": "_hostgroupid"
+			}
+		},
+		"out": [
+			{
+				"type": "_hostid"
+			},
+			{
+				"type": "_hostids"
+			},
+			{
+				"type": "_hostgroupid"
+			},
+			{
+				"type": "_hostgroupids"
+			}
+
+		]
+	},
+	"actions": {
+		"widget.hostandgrpnavigatorrme.view": {
+			"class": "WidgetView"
+		}
+	},
+	"assets": {
+		"js": ["class.hostandgroupnavigator.js", "class.widget.js", "class.widget-field.host-grouping.js"]
+	}
+}
