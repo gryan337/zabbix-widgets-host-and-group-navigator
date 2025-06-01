@@ -1,4 +1,4 @@
-# Zabbix Custom Widget - Table
+# Zabbix Custom Widget - Host and Hostgroup Navigator
 A clone of the Zabbix host navigator widget, but with extended usability features and improved functionality
 
 ## Widget Images From Dashboard
