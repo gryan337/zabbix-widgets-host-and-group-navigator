@@ -11,7 +11,7 @@ A clone of the Zabbix host navigator widget, but with extended usability feature
 
 ## Data collection -> Host groups configuration for the Dashboard screenshot above
 
-<img src="screenshots/DataCollection_HostGroups.png" width="525" height="450" />
+<img src="screenshots/DataCollection_HostGroups.png" width="900" height="400" />
 
 
 ## Required Zabbix version
