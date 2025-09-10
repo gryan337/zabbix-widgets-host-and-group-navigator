@@ -123,6 +123,20 @@ class CHostAndGroupNavigator {
 	 * @param {Array} hosts  Array of hosts and their info.
 	 */
 	#prepareNodesStructure(hosts) {
+		const reset_hosts = [];
+		const new_hosts = [];
+
+		for (let i = 0; i < hosts.length; i++) {
+			if (hosts[i].name === 'RESET DISPLAY') {
+				reset_hosts.push(hosts[i]);
+			}
+			else {
+				new_hosts.push(hosts[i]);
+			}
+		}
+
+		hosts = new_hosts;
+
 		if (this.#config.group_by.length > 0) {
 			for (const host of hosts) {
 				this.#createGroup(host);
@@ -136,6 +150,10 @@ class CHostAndGroupNavigator {
 		}
 		else {
 			this.#nodes = hosts;
+		}
+
+		if (reset_hosts.length > 0) {
+			this.#nodes.unshift(reset_hosts[0]);
 		}
 	}
 
@@ -243,8 +261,10 @@ class CHostAndGroupNavigator {
 						}
 
 						if (level === parts.length - 1) {
-							if (!new_group.children.some(child => child.hostid === host.hostid)) {
-								new_group.children.push(host);
+							if (new_group.hasOwnProperty('children')) {
+								if (!new_group.children.some(child => child.hostid === host.hostid)) {
+									new_group.children.push(host);
+								}
 							}
 						}
 						else {

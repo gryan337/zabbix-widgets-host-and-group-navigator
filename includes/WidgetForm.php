@@ -35,7 +35,7 @@ class WidgetForm extends CWidgetForm {
 	public const PROBLEMS_NONE = 2;
 
 	private const LINES_MIN = 1;
-	private const LINES_MAX = 9999;
+	private const LINES_MAX = 50000;
 	private const LINES_DEFAULT = 100;
 
 	public function addFields(): self {
@@ -43,6 +43,10 @@ class WidgetForm extends CWidgetForm {
 			->addField($this->isTemplateDashboard()
 				? null
 				: new CWidgetFieldMultiSelectGroup('groupids', _('Host groups'))
+			)
+			->addField($this->isTemplateDashboard()
+				? null
+				: new CWidgetFieldMultiSelectGroup('exclude_groupids', _('Exclude host groups'))
 			)
 			->addField($this->isTemplateDashboard()
 				? null
@@ -76,10 +80,14 @@ class WidgetForm extends CWidgetForm {
 				)
 			)
 			->addField(
-				new CWidgetFieldCheckBox('use_cookies', _('Use cookies'))
+				new CWidgetFieldCheckBox('no_select_first_entry', _('Do not auto-select first entry'))
 			)
 			->addField(
-				new CWidgetFieldCheckBox('no_select_first_entry', _('Do not auto-select first entry'))
+				new CWidgetFieldCheckBox('update_on_filter_only', _('Update on filter only'))
+			)
+			->addField($this->isTemplateDashboard()
+				? null
+				: new CWidgetFieldCheckBox('add_reset', _('Add a Reset'))
 			)
 			->addField(
 				new CWidgetFieldCheckBox('host_groups_only', _('Show host groups only'))
