@@ -16,7 +16,7 @@ A clone of the Zabbix host navigator widget, but with extended usability feature
 
 ## Required Zabbix version
 
- - All versions of Zabbix 7.2
+ - Please clone the repository version that matches your Zabbix version (7.2, 7.4, etc..)
 
 ## Purpose
 
@@ -44,7 +44,7 @@ The reason for this change is because Zabbix' built-in host group hierarchy is v
 
 - Adds a checkbox in the configuration to prevent auto-selection of the first host and host group. In version 7.0 this was the default behavior. In 7.2 the developers made it so that if a widget is connected to another widget, the controlling widget would automatically choose the first entry (host, item). This wasn't a change I liked by default. So, in this widget you can turn it off by checkmarking 'Do not auto-select first entry'.
 
-- Adds a configuration option to store host and host group selections in a cookie. This is very useful if you have many dashboard pages or dashboards. With the regular host navigator widget each time you refresh the page, go to another page or another dashboad you have to find the host group or host again and click it again. For large setups with many dashboards and systems this can be cumbersome and exhausting to the user. Using the cookie option stores the host or host group you selected. So, if you navigate to another page or dashboard with this widget, and it is also configured to use cookies, it will automatically re-select the host and/or host group you last selected. By default, the checkbox in the configuration form is not selected. You must click the checkbox in every instance of this widget for this feature to fully work.
+- For 7.2 only...Adds a configuration option to store host and host group selections in a cookie. This is very useful if you have many dashboard pages or dashboards. With the regular host navigator widget each time you refresh the page, go to another page or another dashboad you have to find the host group or host again and click it again. For large setups with many dashboards and systems this can be cumbersome and exhausting to the user. Using the cookie option stores the host or host group you selected. So, if you navigate to another page or dashboard with this widget, and it is also configured to use cookies, it will automatically re-select the host and/or host group you last selected. By default, the checkbox in the configuration form is not selected. You must click the checkbox in every instance of this widget for this feature to fully work. In 7.4 the cookie is set by default and allows for intuitive navigation across dashboard tabs and dashboards while preserving the last selected Host group.
 
 - A configuration option, 'Show host groups only', was added to permit only showing host groups in the widget and no hosts. I personally find this useful because in one widget you can turn this on and have it broadcast to another one of these widgets that is configured to only show the hosts of the broadcasted host group. This makes for an intuitive dashboard flow.
 
