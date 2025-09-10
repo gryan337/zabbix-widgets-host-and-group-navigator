@@ -40,12 +40,14 @@ class CWidgetFieldHostGroupingView extends CWidgetFieldView {
 
 	public function getJavaScript(): string {
 		return '
-			document.forms["'.$this->form_name.'"].fields["'.$this->field->getName().'"] =
+			CWidgetForm.addField(
 				new CWidgetFieldHostGrouping('.json_encode([
-					'field_name' => $this->field->getName(),
-					'field_value' => $this->field->getValue(),
+					'name' => $this->field->getName(),
+					'form_name' => $this->form_name,
+					'value' => $this->field->getValue(),
 					'max_rows' => CWidgetFieldHostGrouping::MAX_ROWS
-				]).');
+				]).')
+			);
 		';
 	}
 

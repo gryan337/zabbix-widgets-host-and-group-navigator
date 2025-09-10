@@ -69,8 +69,8 @@ class WidgetView extends CControllerDashboardWidgetView {
 		$is_show_in_maintenance_on = $this->fields_values['maintenance'] == 1;
 
 		$output = $is_show_in_maintenance_on
-			? ['hostid', 'name', 'status', 'maintenanceid', 'maintenance_status']
-			: ['hostid', 'name'];
+			? ['hostid', 'name', 'status', 'maintenanceid', 'maintenance_status', 'groupid']
+			: ['hostid', 'name', 'groupid'];
 
 		$group_by_host_groups = false;
 		$group_by_severity = $this->fields_values['problems'] != WidgetForm::PROBLEMS_NONE;
@@ -91,13 +91,20 @@ class WidgetView extends CControllerDashboardWidgetView {
 		}
 
 		$hosts = [];
+		$groupids = $this->fields_values['groupids']
+			? getSubgroups($this->fields_values['groupids'])
+			: null;
+
+		$exclude_groupids = $this->fields_values['exclude_groupids']
+			? getSubgroups($this->fields_values['exclude_groupids'])
+			: null;
+
 
 		if ($override_hostid === '' && !$this->isTemplateDashboard()) {
-			$groupids = $this->fields_values['groupids'] ? getSubGroups($this->fields_values['groupids']) : null;
 
 			// Get hosts from host pattern and search narrowing criteria.
 			$hosts = API::Host()->get([
-				'output' => [],
+				'output' => ['groupid'],
 				'groupids' => $groupids,
 				'evaltype' => $this->fields_values['host_tags_evaltype'],
 				'tags' => $this->fields_values['host_tags'] ?: null,
@@ -107,7 +114,8 @@ class WidgetView extends CControllerDashboardWidgetView {
 				'searchByAny' => true,
 				'searchWildcardsEnabled' => true,
 				'severities' => $this->fields_values['severities'] ?: null,
-				'preservekeys' => true
+				'preservekeys' => true,
+				'selectHostGroups' => ['groupid']
 			]);
 
 			if (!$hosts) {
@@ -146,6 +154,24 @@ class WidgetView extends CControllerDashboardWidgetView {
 
 		if (!$hosts) {
 			return $no_data;
+		}
+
+		if ($exclude_groupids) {
+			foreach ($hosts as $host_index => $host) {
+				$hostgroups = [];
+				if (isset($host['hostgroups']) && is_array($host['hostgroups'])) {
+					foreach ($host['hostgroups'] as &$hg) {
+						if (in_array($hg['groupid'], $exclude_groupids)) {
+							unset($hg['groupid']);
+						}
+						else {
+							$hostgroups[] = $hg;
+							unset($hg);
+						}
+						$hosts[$host_index]['hostgroups'] = $hostgroups;
+					}
+				}
+			}
 		}
 
 		CArrayHelper::sort($hosts, ['name']);
@@ -287,7 +313,7 @@ class WidgetView extends CControllerDashboardWidgetView {
 
 		if ($maintenanceids) {
 			$maintenances = API::Maintenance()->get([
-				'output' => ['name', 'maintenance_type', 'description'],
+				'output' => ['name', 'maintenance_type', 'description', 'groupid'],
 				'maintenanceids' => array_keys($maintenanceids),
 				'preservekeys' => true
 			]);

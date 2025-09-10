@@ -27,6 +27,10 @@ $hosts_field = array_key_exists('hosts', $data['fields'])
 
 $form
 	->addField($groupids_field)
+	->addField(array_key_exists('exclude_groupids', $data['fields'])
+		? new CWidgetFieldMultiSelectGroupView($data['fields']['exclude_groupids'])
+		: null
+	)
 	->addField($hosts_field)
 	->addField(array_key_exists('status', $data['fields'])
 		? new CWidgetFieldRadioButtonListView($data['fields']['status'])
@@ -47,23 +51,33 @@ $form
 		new CWidgetFieldCheckBoxView($data['fields']['maintenance'])
 	)
 	->addField(
-		(new CWidgetFieldCheckBoxView($data['fields']['use_cookies']))
-			->setFieldHint(
-				makeHelpIcon([
-					_('If checked, selected hosts and groups will be stored in a cookie'), BR(), BR(),
-					_('This is useful when switching between multiple dashboards or pages, '), BR(),
-					_('allowing you to keep your last selected host or host group automatically '), BR(),
-					_('via a cookie, without needing to reselect it.')
-				])
-			)
-	)
-	->addField(
 		(new CWidgetFieldCheckBoxView($data['fields']['no_select_first_entry']))
 			->setFieldHint(
 				makeHelpIcon([
 					_('By default, none of the host groups or hosts will be auto-selected when the widget loads for the first time')
 				])
 			)
+	)
+	->addField(
+		(new CWidgetFieldCheckBoxView($data['fields']['update_on_filter_only']))
+			->setFieldHint(
+				makeHelpIcon([
+					_('Checking this will mean that no values will be displayed until this '), BR(),
+					_('widget is filtered/updated by another widget. This requires that another '), BR(),
+					_('dashboard widget be set in the Host groups field.'), BR(),
+					_('The use case for this is when you want to have one navigator show the host groups '), BR(),
+					_('and another navigator show hosts, but only when a host group has been selected.')
+				])
+			)
+	)
+	->addField(array_key_exists('add_reset', $data['fields'])
+		? (new CWidgetFieldCheckBoxView($data['fields']['add_reset']))
+			->setFieldHint(
+				makeHelpIcon([
+					_('Adds the ability to reset the connected widgets to the original values')
+				])
+			)
+		: null
 	)
 	->addField(
 		(new CWidgetFieldCheckBoxView($data['fields']['host_groups_only']))

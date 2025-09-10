@@ -44,8 +44,18 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 	 */
 	#csrf_token = null;
 
-	#host_cookie_set = false;
+	#refInHosts = false;
 	#group_cookie_set = false;
+	#original_hostid = null;
+
+	#isSelectingText = false;
+	#scrollTop = 0;
+	#currentScrollTop = 0;
+
+	constructor(...args) {
+		super(...args);
+		this.boundHideDropdown = this.hideDropdownHnav.bind(this);
+	}
 
 	onActivate() {
 		this._contents.scrollTop = this.#contents_scroll_top;
@@ -67,6 +77,19 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 	}
 
 	setContents(response) {
+		if (this._fields.update_on_filter_only) {
+			const groupIdsObj = this.getFieldsReferredData().get('groupids');
+			if (groupIdsObj && (groupIdsObj.value.length === 0 || groupIdsObj.value.includes('000000'))) {
+				this.clearContents();
+				this.setCoverMessage({
+					message: t('Choose a host group value to update'),
+					icon: ZBX_ICON_SEARCH_LARGE
+				});
+
+				return;
+			}
+		}
+
 		if (response.hosts.length === 0) {
 			this.clearContents();
 			this.setCoverMessage({
@@ -89,7 +112,17 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 			this.#activateListeners();
 		}
 
+		if (this._fields.add_reset) {
+			response.hosts.push({
+				'hostid': '000000',
+				'name': 'RESET DISPLAY',
+				'level': 0,
+				'problem_count': 0
+			});
+		}
+
 		this.addGroupNavigationStyling();
+		this.setupScrollListener();
 
 		this.#host_navigator.setValue({
 			hosts: response.hosts,
@@ -101,43 +134,44 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 		if (this._fields.group_by?.[0]?.attribute === 0) {
 			this.hideGroupNodes();
 			this.processNodes(response);
+			this.refreshTree();
 		}
 
-		if (this._fields.use_cookies) {
-			const references = this.getReferenceFromCookie("references");
-			if (references) {
-				try {
-					var reference_cookie = JSON.parse(references);
-					for (let i = 0; i < response.hosts.length; i++) {
-						if (response.hosts[i]['hostid'] == reference_cookie['hostids']) {
-							this.#host_cookie_set = true;
-							break;
-						}
-					}
+		let references = this.getReferenceFromCookie("references");
+		this.#refInHosts = false;
 
-					this.#selected_groupid = reference_cookie['hostgroupids'][0];
-					if (this.all_group_ids?.includes(this.#selected_groupid)) {
-						this.#group_cookie_set = true;
+		if (references) {
+			try {
+				var reference_cookie = JSON.parse(references);
+				for (let i = 0; i < response.hosts.length; i++) {
+					if (response.hosts[i]['hostid'] == reference_cookie['hostids']) {
+						this.#refInHosts = true;
+						break;
 					}
-
-					if (this.#host_cookie_set) {
-						if (reference_cookie['hostids']) {
-							this.#selected_hostid = reference_cookie['hostids'][0];
-							this.setNewCookie(reference_cookie, 'hostids', this.#selected_hostid);
-						}
-					}
-
-					if (this.#group_cookie_set) {
-						if (reference_cookie['hostgroupids']) {
-							this.#selected_groupid = reference_cookie['hostgroupids'][0];
-							this.setNewCookie(reference_cookie, 'hostgroupids', this.#selected_groupid);
-						}
-					}
-
 				}
-				catch (error) {
-					console.warn('Invalid JSON for cookie: "references"', error);
+
+				this.#selected_groupid = reference_cookie['hostgroupids'][0];
+				if (this.all_group_ids?.includes(this.#selected_groupid)) {
+					this.#group_cookie_set = true;
 				}
+
+				if (this.#refInHosts) {
+					if (reference_cookie['hostids']) {
+						this.#selected_hostid = reference_cookie['hostids'][0];
+						this.setNewCookie(reference_cookie, 'hostids', this.#selected_hostid);
+					}
+				}
+
+				if (this.#group_cookie_set) {
+					if (reference_cookie['hostgroupids']) {
+						this.#selected_groupid = reference_cookie['hostgroupids'][0];
+						this.setNewCookie(reference_cookie, 'hostgroupids', this.#selected_groupid);
+					}
+				}
+
+			}
+			catch (error) {
+				console.warn('Invalid JSON for cookie: "references"', error);
 			}
 		}
 
@@ -145,15 +179,15 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 			this.initAutocomplete();
 		}
 
+		if (!this.hasEverUpdated()) {
+			this.#original_hostid = this.#selected_hostid;
+		}
+
 		if (!this._fields.no_select_first_entry) {
-			if (!this.hasEverUpdated() && this.isReferred()) {
-				if (!this.#host_cookie_set) {
+			if ((!this.hasEverUpdated() || (this.hasEverUpdated() && this.#original_hostid === null)) && this.isReferred()) {
+				if (!this.#refInHosts) {
 					this.#selected_hostid = this.#getDefaultSelectable();
 				}
-			}
-
-			if (!this._fields.host_groups_only && this.#selected_hostid !== null) {
-				this.#host_navigator.selectItem(this.#selected_hostid);
 			}
 
 			if (this.#selected_groupid !== null) {
@@ -162,21 +196,74 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 					this.selectAndHighlightNodes();
 				}
 			}
+
+			if (!this._fields.host_groups_only && this.#selected_hostid !== null) {
+				this.#host_navigator.selectItem(this.#selected_hostid);
+			}
 		}
 		else {
+			if (this.hasEverUpdated()) {
+				if (this.#selected_groupid !== null) {
+					if (this._fields.group_by?.[0]?.attribute === 0) {
+						this.hideGroupNodes();
+						this.selectAndHighlightNodes();
+					}
+				}
+
+				if (!this._fields.host_groups_only && (this.#selected_hostid !== this.#original_hostid)) {
+					this.#host_navigator.selectItem(this.#selected_hostid);
+				}
+			}
+		}
+
+		this.scrollToSelection();
+
+		const autocompleteInput = this._container.querySelector('.autocomplete-input');
+		const widgetContents = this._container.querySelector('.dashboard-grid-widget-contents');
+
+		if (autocompleteInput !== null) {
+			autocompleteInput.addEventListener('mousedown', () => {
+				this.#isSelectingText = true;
+				this.#scrollTop = widgetContents.scrollTop;
+			});
+
+			this.detachScrollListeners();
+			this.boundMouseUp = this.handleMouseUpHnav.bind(this);
+			this.attachScrollListeners();
+
+			widgetContents.addEventListener('scroll', (event) => {
+				if (this.#isSelectingText) {
+					widgetContents.scrollTop = this.#scrollTop;
+				}
+			});
 		}
 
 	}
 
+	attachScrollListeners() {
+		document.addEventListener('mouseup', this.boundMouseUp);
+	}
+
+	detachScrollListeners() {
+		document.removeEventListener('mouseup', this.boundMouseUp);
+	}
+
+	handleMouseUpHnav() {
+		if (this.#isSelectingText) {
+			this.#isSelectingText = false;
+			document.body.style.userSelect = '';
+		}
+	}
+
 	findGroupId(data, searchString) {
 		for (let item of data) {
-			for (let group of item.hostgroups) {
+			for (let group of item.hostgroups ?? []) {
 				if (group.name === searchString) {
 					return group.groupid;
 				}
 			}
 
-			for (let group of item.extra_groups) {
+			for (let group of item.extra_groups ?? []) {
 				if (group.name === searchString) {
 					return group.groupid;
 				}
@@ -338,7 +425,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 		if (this._fields.host_groups_only) {
 			const inodes = this._container.querySelectorAll('.navigation-tree-node-is-item');
 			inodes.forEach(inode => {
-				inode.style.display = 'none';
+				inode.remove();
 			});
 		}
 
@@ -352,10 +439,13 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 		const self = this;
 		const $container = $(this._container);
 		const $hostNavigator = $container.find('.host-navigator');
+		const $widgetContents= $container.find('.dashboard-grid-widget-body');
 
-		if ($container.find('.autocomplete-container').length > 0) {
-			return;
+		const $oldContainer = $container.find('.autocomplete-container');
+		if ($oldContainer.length > 0) {
+			$oldContainer.remove();
 		}
+		self.detachDropdownListeners();
 
 		const extractGroupIdentifiers = () => {
 			const groupIdentifiers = new Set();
@@ -376,7 +466,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 		const $dropdown = $('<div class="autocomplete-dropdown"></div>');
 		const $autocompleteContainer = $('<div class="autocomplete-container"></div>').append($inputBox).append($dropdownArrow).append($dropdown);
 
-		$hostNavigator.before($autocompleteContainer);
+		$widgetContents.before($autocompleteContainer);
 
 		$inputBox.on('input', function() {
 			const val = $(this).val().toLowerCase();
@@ -389,21 +479,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 							$inputBox.val(group);
 							$dropdown.hide();
 							const $groupNode = $hostNavigator.find(`[data-group_identifier='["${group.split('/').join('","')}"]']`);
-							if ($groupNode.length > 0) {
-								self.#selected_groupid = $groupNode.attr('data-group_id');
-								if (self.#selected_groupid === undefined) {
-									self.#selected_groupid = '000000';
-								}
-								self.hideGroupNodes();
-								const $infoDiv = $groupNode.find('.navigation-tree-node-info').first()[0];
-
-								if (self.#selected_groupid !== '000000') {
-									self.markSelected($infoDiv);
-								}
-
-								self.refreshTree();
-								$groupNode[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-							}
+							processSelectedNode($groupNode);
 						});
 						$dropdown.append($item);
 					}
@@ -429,21 +505,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 						$inputBox.val(group);
 						$dropdown.hide();
 						const $groupNode = $hostNavigator.find(`[data-group_identifier='["${group.split('/').join('","')}"]']`);
-						if ($groupNode.length > 0) {
-							self.#selected_groupid = $groupNode.attr('data-group_id');
-							if (self.#selected_groupid === undefined) {
-								self.#selected_groupid = '000000';
-							}
-							self.hideGroupNodes();
-							const $infoDiv = $groupNode.find('.navigation-tree-node-info').first()[0];
-
-							if (self.#selected_groupid !== '000000') {
-								self.markSelected($infoDiv);
-							}
-
-							self.refreshTree();
-							$groupNode[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-						}
+						processSelectedNode($groupNode);
 					});
 					$dropdown.append($item);
 				});
@@ -451,11 +513,68 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 			}
 		});
 
-		$(document).on('click', function(e) {
-			if (!$(e.target).closest('.autocomplete-container').length) {
-				$dropdown.hide();
+		function processSelectedNode(groupNode) {
+			if (groupNode.length > 0) {
+				self.#selected_groupid = groupNode.attr('data-group_id');
+				if (self.#selected_groupid === undefined) {
+					self.#selected_groupid = '000000';
+				}
+				self.hideGroupNodes();
+				const $infoDiv = groupNode.find('.navigation-tree-node-info').first()[0];
+
+				if (self.#selected_groupid !== '000000') {
+					self.markSelected($infoDiv);
+				}
+
+				self.refreshTree();
+				self.scrollToSelection();
 			}
-		});
+                }
+
+                self.attachDropdownListeners();
+	}
+
+	hideDropdownHnav(e) {
+		if (!$(e.target).closest('.autocomplete-container').length) {
+			$('.autocomplete-dropdown').hide();
+		}
+	}
+
+	attachDropdownListeners() {
+		$(document).on('click', this.boundHideDropdown);
+	}
+
+	detachDropdownListeners() {
+		$(document).off('click', this.boundHideDropdown);
+	}
+
+	setupScrollListener() {
+		const hostNavigator = this._body.querySelector('.host-navigator');
+		if (hostNavigator) {
+			hostNavigator.addEventListener('scroll', () => {
+				this.#currentScrollTop = hostNavigator.scrollTop;
+			});
+		}
+	}
+
+	scrollToSelection() {
+		const hostNavigator = this._body.querySelector('.host-navigator');
+		if (!hostNavigator) return;
+
+		const selectedItem = hostNavigator.querySelector('.nav-selected');
+		const parentElement = selectedItem?.closest('.navigation-tree-node-is-group');
+		const container = this._container.querySelector('.dashboard-grid-widget-contents');
+		const offset = 125;
+		if (selectedItem && parentElement) {
+			const containerRect = container.getBoundingClientRect();
+			const elementRect = parentElement.getBoundingClientRect();
+
+			const scrollToAdjustment = elementRect.top - containerRect.top - offset;
+			container.scrollTop += scrollToAdjustment;
+		}
+		else {
+			hostNavigator.scrollTop = this.#currentScrollTop;
+		}
 	}
 
 	processNodes(response) {
@@ -484,6 +603,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 						this.#selected_groupid = groupID;
 						this.markSelected(infoDiv);
 						this.refreshTree();
+						this.scrollToSelection();
 					}
 				});
 			}
@@ -521,6 +641,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 		this._container.querySelectorAll('.navigation-tree-node').forEach(node => {
 			const infoDiv = node.querySelector('.navigation-tree-node-info');
 			const arrowSpan = infoDiv?.querySelector('.navigation-tree-node-info-arrow span');
+
 			if (arrowSpan) {
 				if (node.classList.contains('navigation-tree-node-is-open')) {
 					arrowSpan.classList.add('arrow-down');
@@ -557,18 +678,16 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 			}
 		});
 
-		if (!this._fields.host_groups_only) {
-			const selectedNode = this._container.querySelector('.nav-selected');
-			if (selectedNode) {
-				const selectedGroupNode = selectedNode.closest('.navigation-tree-node.navigation-tree-node-is-group');
-				if (selectedGroupNode && !selectedGroupNode.classList.contains('navigation-tree-node-is-open')) {
-					selectedGroupNode.classList.add('navigation-tree-node-is-open');
-					const infoDiv = selectedGroupNode.querySelector('.navigation-tree-node-info');
-					const arrowSpan = infoDiv?.querySelector('.navigation-tree-node-info-arrow span');
-					if (arrowSpan) {
-						arrowSpan.classList.add('arrow-down');
-						arrowSpan.classList.remove('arrow-right');
-					}
+		const selectedNode = this._container.querySelector('.nav-selected');
+		if (selectedNode) {
+			const selectedGroupNode = selectedNode.closest('.navigation-tree-node.navigation-tree-node-is-group');
+			if (selectedGroupNode && !selectedGroupNode.classList.contains('navigation-tree-node-is-open')) {
+				selectedGroupNode.classList.add('navigation-tree-node-is-open');
+				const infoDiv = selectedGroupNode.querySelector('.navigation-tree-node-info');
+				const arrowSpan = infoDiv?.querySelector('.navigation-tree-node-info-arrow span');
+				if (arrowSpan) {
+					arrowSpan.classList.add('arrow-down');
+					arrowSpan.classList.remove('arrow-right');
 				}
 			}
 		}
@@ -591,6 +710,11 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 				.nav-hoverable {
 					cursor: pointer;
 				}
+				.nav-hoverable:hover {
+					background-color: rgba(241, 156, 71, 0.12);
+					border-radius: 6px;
+					transition: background-color 0.2s ease;
+				}
 				.nav-selected {
 					background: linear-gradient(to right, #3a506b, #5bc0be);
 					color: #fff;
@@ -598,21 +722,25 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 					padding: 4px 8px;
 					box-shadow: 0 0 8px rgba(52, 152, 219, 0.5);
 				}
-				.nav-selected: hover {
+				.nav-selected:hover {
 					background-color: rgba(241, 156, 71, 0.12);
 					border-radius: 6px;
 					transition: background-color 0.2s ease;
 				}
 				.autocomplete-container {
-					position: relative;
 					display: inline-block;
 					width: 100%;
+					position: sticky;
+					box-sizing: border-box;
+					top: 0;
+					z-index: 10;
+					background: var(--autocomplete-bg);
+					padding: 6px 0;
 				}
 				.autocomplete-input {
 					width: calc(100% - 40px);
 					font-size: 12px;
 					padding-right: 10px;
-					box-sizing: border-box;
 				}
 				.modified-chevron {
 					position: absolute;
@@ -630,7 +758,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 					z-index: 1000;
 					background-color: var(--autocomplete-bg);
 					color: var(--autocomplete-color);
-					max-height: 200px;
+					max-height: 300px;
 					overflow-y: auto;
 					font-size: 12px;
 					width: calc(100% - 40px);
