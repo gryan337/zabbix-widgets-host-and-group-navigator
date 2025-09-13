@@ -26,9 +26,6 @@ A clone of the Zabbix host navigator widget, but with extended usability feature
 
 - This widget was originally cloned from the [hostnavigator](https://www.zabbix.com/documentation/current/en/manual/web_interface/frontend_sections/dashboards/widgets/host_navigator) Zabbix widget.
 
-## Future Development
-
-- At this time, the widget is considered feature complete. I would really like to see what feedback this widget generates from the community because I would always like to improve things if I can.
 
 ## Functionality and Features
 
