@@ -61,3 +61,16 @@ The reason for this change is because Zabbix' built-in host group hierarchy is v
 ## Known Issues and Things I'd like to polish
 
 - None
+
+
+# 🚀 Project Roadmap
+
+A high-level view of our project milestones and upcoming goals.
+
+---
+
+## 📍 Q4 2025
+
+- [ ] Add the ability to sort the host list ascendingly or descendingly with a configuration option  
+
+---
