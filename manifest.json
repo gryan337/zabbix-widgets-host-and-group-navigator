@@ -5,7 +5,7 @@
 	"name": "Host And Hostgroup Navigator",
 	"namespace": "HostAndGroupNavigator",
 	"version": "1.0",
-	"author": "Ryan Eberly",
+	"author": "RME",
 	"description": "Displays host group hierarchy and allows for controlling other widgets with either hostgroup or host selections",
 	"widget": {
 		"size": {
