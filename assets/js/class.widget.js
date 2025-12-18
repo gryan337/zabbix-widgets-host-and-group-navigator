@@ -117,7 +117,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 				'hostid': '000000',
 				'name': 'RESET DISPLAY',
 				'level': 0,
-				'problem_count': 0
+				'problem_count': [0, 0, 0, 0, 0, 0],
 			});
 		}
 
@@ -625,13 +625,19 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 	selectAndHighlightNodes() {
 		const nodes = this._container.querySelectorAll('[data-group_id]');
 		if (this.#selected_groupid !== null) {
-			nodes.forEach(node => {
-				if (node.getAttribute('data-group_id') === this.#selected_groupid) {
-					const reloadInfoDiv = node.querySelector('.navigation-tree-node-info');
-					reloadInfoDiv.classList.add('nav-selected');
-					this.#broadcastGroup();
+			if (this.#selected_groupid === '000000') {
+				this.#broadcastGroup();
+			}
+			else {
+				for (const node of nodes) {
+					if (node.getAttribute('data-group_id') === this.#selected_groupid) {
+						const reloadInfoDiv = node.querySelector('.navigation-tree-node-info');
+						reloadInfoDiv.classList.add('nav-selected');
+						this.#broadcastGroup();
+						break;
+					}
 				}
-			});
+			}
 
 			this.refreshTree();
 		}

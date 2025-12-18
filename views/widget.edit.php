@@ -74,7 +74,7 @@ $form
 		? (new CWidgetFieldCheckBoxView($data['fields']['add_reset']))
 			->setFieldHint(
 				makeHelpIcon([
-					_('Adds the ability to reset the connected widgets to the original values')
+					_('Adds an explicit "host" entry at the top of the widget titled "RESET DISPLAY" that, when clicked, will reset widgets that reference this widget to their default configuration.')
 				])
 			)
 		: null
