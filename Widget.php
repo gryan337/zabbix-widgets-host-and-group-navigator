@@ -8,7 +8,7 @@ use Zabbix\Core\CWidget;
 class Widget extends CWidget {
 
 	public function getDefaultName(): string {
-		return _('Host and Hostgroup navigator');
+		return _('RME Host and Hostgroup navigator');
 	}
 
 	public function getTranslationStrings(): array {
