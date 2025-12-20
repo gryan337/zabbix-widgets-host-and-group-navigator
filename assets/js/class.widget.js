@@ -629,13 +629,22 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 				this.#broadcastGroup();
 			}
 			else {
+				let groupExists = false;
 				for (const node of nodes) {
 					if (node.getAttribute('data-group_id') === this.#selected_groupid) {
 						const reloadInfoDiv = node.querySelector('.navigation-tree-node-info');
 						reloadInfoDiv.classList.add('nav-selected');
 						this.#broadcastGroup();
+						groupExists = true;
 						break;
 					}
+				}
+
+				if (!groupExists) {
+					this.broadcast({
+						[CWidgetsData.DATA_TYPE_HOST_GROUP_ID]: ['000000'],
+						[CWidgetsData.DATA_TYPE_HOST_GROUP_IDS]: ['000000']
+					});
 				}
 			}
 
