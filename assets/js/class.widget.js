@@ -52,6 +52,9 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 	#scrollTop = 0;
 	#currentScrollTop = 0;
 
+	#searchBoxValue = '';
+	#inputHadFocus = false;
+
 	constructor(...args) {
 		super(...args);
 		this.boundHideDropdown = this.hideDropdownHnav.bind(this);
@@ -121,7 +124,6 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 			});
 		}
 
-		this.addGroupNavigationStyling();
 		this.setupScrollListener();
 
 		this.#host_navigator.setValue({
@@ -177,6 +179,15 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 
 		if (this._fields.group_by?.[0]?.attribute === 0) {
 			this.initAutocomplete();
+
+			// Restore focus if it was previously focused
+			if (this.#inputHadFocus && this.autocompleteInput) {
+				requestAnimationFrame(() => {
+					this.autocompleteInput.focus();
+					const length = this.autocompleteInput.value.length;
+					this.autocompleteInput.setSelectionRange(length, length);
+				});
+			}
 		}
 
 		if (!this.hasEverUpdated()) {
@@ -445,13 +456,23 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 		if ($oldContainer.length > 0) {
 			$oldContainer.remove();
 		}
+
+		// Clean up existing dropdown if it exists
+		if (this.autocompleteDropdown && this.autocompleteDropdown.parentNode) {
+			this.autocompleteDropdown.remove();
+		}
+
+		// Remove any orphaned dropdowns
+		const orphanedDropdowns = document.querySelectorAll('body > .autocomplete-dropdown[data-autocomplete-dropdown="true"]');
+		orphanedDropdowns.forEach(dropdown => dropdown.remove());
+
 		self.detachDropdownListeners();
 
 		const extractGroupIdentifiers = () => {
 			const groupIdentifiers = new Set();
 			$('[data-group_identifier]', $hostNavigator).each(function () {
 				const groupId = $(this).attr('data-group_id');
-				if (groupId) {  // Only include items with valid data-group_id
+				if (groupId) {
 					const identifier = JSON.parse($(this).attr('data-group_identifier')).join('/');
 					groupIdentifiers.add(identifier);
 				}
@@ -461,59 +482,222 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 
 		const groupIdentifiers = extractGroupIdentifiers();
 
-		const $inputBox = $('<input type="text" placeholder="Search for a group..." class="autocomplete-input">');
-		const $dropdownArrow = $('<div class="zi-chevron-down modified-chevron"></div>');
-		const $dropdown = $('<div class="autocomplete-dropdown"></div>');
-		const $autocompleteContainer = $('<div class="autocomplete-container"></div>').append($inputBox).append($dropdownArrow).append($dropdown);
+		const $inputBox = $(`<input type="text" placeholder="Search for a group..." value="${self.#searchBoxValue}" class="autocomplete-input">`);
+		$inputBox.attr({
+			'autocomplete': 'off',
+			'role': 'combobox',
+			'aria-autocomplete': 'list',
+			'aria-expanded': 'false',
+			'aria-controls': 'autocomplete-dropdown-' + self._uniqueid
+		});
 
+		const $dropdownArrow = $('<div class="zi-chevron-down modified-chevron"></div>');
+		$dropdownArrow.attr({
+			'role': 'button',
+			'tabindex': '0',
+			'aria-label': 'Toggle dropdown'
+		});
+
+		const $dropdown = $('<div class="autocomplete-dropdown"></div>');
+		$dropdown.attr({
+			'data-autocomplete-dropdown': 'true',
+			'role': 'listbox',
+			'id': 'autocomplete-dropdown-' + self._uniqueid,
+			'tabindex': '-1'
+		});
+
+		const $autocompleteContainer = $('<div class="autocomplete-container"></div>').append($inputBox).append($dropdownArrow);
+		$autocompleteContainer.attr('data-autocomplete-widget', 'true');
 		$widgetContents.before($autocompleteContainer);
 
-		$inputBox.on('input', function() {
-			const val = $(this).val().toLowerCase();
-			$dropdown.empty();
-			if (val) {
-				groupIdentifiers.forEach(group => {
-					if (group.toLowerCase().indexOf(val) > -1) {
-						const $item = $('<div class="autocomplete-item"></div>').text(group);
-						$item.on('click', function() {
-							$inputBox.val(group);
-							$dropdown.hide();
-							const $groupNode = $hostNavigator.find(`[data-group_identifier='["${group.split('/').join('","')}"]']`);
-							processSelectedNode($groupNode);
-						});
-						$dropdown.append($item);
+		let currentIndex = -1;
+
+		// Position dropdown dynamically with RAF
+		const positionDropdown = () => {
+			if (!document.body.contains($autocompleteContainer[0])) {
+				return;
+			}
+
+			const containerOffset = $autocompleteContainer.offset();
+			const containerWidth = $autocompleteContainer.outerWidth();
+
+			$dropdown.css({
+				'position': 'fixed',
+				'top': containerOffset.top + $autocompleteContainer.outerHeight() + 'px',
+				'left': containerOffset.left + 'px',
+				'width': (containerWidth - 40) + 'px',
+				'z-index': '1000'
+			});
+		};
+
+		// Helper function to get first visible item
+		const getFirstVisibleItem = () => {
+			const allItems = $dropdown.find('.autocomplete-item');
+			return allItems.length > 0 ? allItems[0] : null;
+		};
+
+		// Focus item function
+		const focusItem = (index) => {
+			const allItems = $dropdown.find('.autocomplete-item');
+			if (allItems.length === 0) return;
+
+			allItems.removeClass('focused');
+
+			if (index >= 0 && index < allItems.length) {
+				const itemToFocus = $(allItems[index]);
+				if (!itemToFocus.hasClass('hidden-by-search')) {
+					currentIndex = index;
+					itemToFocus.addClass('focused');
+					itemToFocus[0].scrollIntoView({ block: 'nearest' });
+				}
+			}
+		};
+
+		// Close dropdown function (defined early so it can be used by observers)
+		const closeDropdown = () => {
+			$dropdown.hide();
+			$inputBox.attr('aria-expanded', 'false');
+			$dropdownArrow.removeClass('open');
+			currentIndex = -1;
+			$dropdown.find('.autocomplete-item').removeClass('focused');
+			cleanupRepositionHandlers();
+			cleanupOutsideClickHandler();
+
+			setTimeout(() => {
+				self._resumeUpdating();
+			}, 10);
+		};
+
+		// RAF-based repositioning
+		const rafPlace = () => {
+			if (this._autocompleteRafId) {
+				cancelAnimationFrame(this._autocompleteRafId);
+			}
+			this._autocompleteRafId = requestAnimationFrame(() => {
+				// Check if widget is being dragged
+				if (self._isDragging()) {
+					closeDropdown();
+					return;
+				}
+				positionDropdown();
+				this._autocompleteRafId = null;
+			});
+		};
+
+		// Setup reposition handlers
+		const setupRepositionHandlers = () => {
+			if (this._autocompleteRepositionHandler) {
+				window.removeEventListener('scroll', this._autocompleteRepositionHandler, true);
+				window.removeEventListener('resize', this._autocompleteRepositionHandler, true);
+				this._autocompleteRepositionHandler = null;
+			}
+
+			this._autocompleteRepositionHandler = () => {
+				rafPlace();
+			};
+
+			window.addEventListener('scroll', this._autocompleteRepositionHandler, true);
+			window.addEventListener('resize', this._autocompleteRepositionHandler, true);
+		};
+
+		// Cleanup reposition handlers
+		const cleanupRepositionHandlers = () => {
+			if (this._autocompleteRepositionHandler) {
+				window.removeEventListener('scroll', this._autocompleteRepositionHandler, true);
+				window.removeEventListener('resize', this._autocompleteRepositionHandler, true);
+				this._autocompleteRepositionHandler = null;
+			}
+
+			if (this._autocompleteRafId) {
+				cancelAnimationFrame(this._autocompleteRafId);
+				this._autocompleteRafId = null;
+			}
+		};
+
+		// Setup outside click handler
+		const setupOutsideClickHandler = () => {
+			if (this._autocompleteOutsideClickHandler) {
+				document.removeEventListener('click', this._autocompleteOutsideClickHandler);
+				this._autocompleteOutsideClickHandler = null;
+			}
+
+			this._autocompleteOutsideClickHandler = (e) => {
+				let element = e.target;
+				let isOurDropdown = false;
+
+				while (element && element !== document) {
+					if (element.hasAttribute && (element.hasAttribute('data-autocomplete-widget') ||
+							element.hasAttribute('data-autocomplete-dropdown'))) {
+						isOurDropdown = true;
+						break;
 					}
-				});
+					element = element.parentElement;
+				}
+
+				if (!isOurDropdown) {
+					closeDropdown();
+				}
+			};
+
+			setTimeout(() => {
+				document.addEventListener('click', this._autocompleteOutsideClickHandler);
+			}, 10);
+		};
+
+		// Cleanup outside click handler
+		const cleanupOutsideClickHandler = () => {
+			if (this._autocompleteOutsideClickHandler) {
+				document.removeEventListener('click', this._autocompleteOutsideClickHandler);
+				this._autocompleteOutsideClickHandler = null;
 			}
-			if ($dropdown.children().length > 0) {
-				$dropdown.show();
-			}
-			else {
-				$dropdown.hide();
-			}
+		};
+
+		// Watch for dragging via MutationObserver
+		const dragObserver = new MutationObserver((mutations) => {
+			mutations.forEach((mutation) => {
+				if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+					if (self._isDragging() && $dropdown.is(':visible')) {
+						closeDropdown();
+					}
+				}
+			});
 		});
 
-		$dropdownArrow.on('click', function() {
-			if ($dropdown.is(':visible')) {
-				$dropdown.hide();
-			}
-			else {
-				$dropdown.empty();
-				groupIdentifiers.forEach(group => {
-					const $item = $('<div class="autocomplete-item"></div>').text(group);
-					$item.on('click', function() {
-						$inputBox.val(group);
-						$dropdown.hide();
-						const $groupNode = $hostNavigator.find(`[data-group_identifier='["${group.split('/').join('","')}"]']`);
-						processSelectedNode($groupNode);
-					});
-					$dropdown.append($item);
-				});
-				$dropdown.show();
-			}
+		dragObserver.observe(self._target, {
+			attributes: true,
+			attributeFilter: ['class']
 		});
 
-		function processSelectedNode(groupNode) {
+		this._autocompleteDragObserver = dragObserver;
+
+		const openDropdown = (skipFocus = false) => {
+			self._pauseUpdating();
+
+			if (!document.body.contains($dropdown[0])) {
+				document.body.appendChild($dropdown[0]);
+			}
+
+			setupRepositionHandlers();
+
+			requestAnimationFrame(() => {
+				positionDropdown();
+				$dropdown.show();
+				$inputBox.attr('aria-expanded', 'true');
+				$dropdownArrow.addClass('open');
+				setupOutsideClickHandler();
+
+				if (!skipFocus) {
+					const firstVisible = getFirstVisibleItem();
+					if (firstVisible) {
+						const idx = $(firstVisible).data('index');
+						focusItem(idx);
+					}
+					$dropdown.focus();
+				}
+			});
+		};
+
+		function processSelectedNode(groupNode, fromAutocomplete = false) {
 			if (groupNode.length > 0) {
 				self.#selected_groupid = groupNode.attr('data-group_id');
 				if (self.#selected_groupid === undefined) {
@@ -528,15 +712,231 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 
 				self.refreshTree();
 				self.scrollToSelection();
-			}
-                }
 
-                self.attachDropdownListeners();
+				if (fromAutocomplete && self.autocompleteInput) {
+					requestAnimationFrame(() => {
+						self.autocompleteInput.focus();
+						const length = self.autocompleteInput.value.length;
+						self.autocompleteInput.setSelectionRange(length, length);
+					});
+				}
+			}
+		}
+
+		// Populate dropdown with items
+		const populateDropdown = (filterTerm = '') => {
+			$dropdown.empty();
+			const searchRegex = filterTerm ? new RegExp(filterTerm.replace(/\*/g, '.*')) : null;
+
+			let displayIndex = 0; // Track the actual display index
+			groupIdentifiers.forEach((group, originalIndex) => {
+				if (!searchRegex || searchRegex.test(group.toLowerCase())) {
+					const $item = $('<div class="autocomplete-item"></div>').text(group);
+					$item.attr({
+						'role': 'option',
+						'data-index': displayIndex, // Use displayIndex instead of originalIndex
+						'data-text': group.toLowerCase()
+					});
+
+					$item.on('click', function(e) {
+						e.stopPropagation();
+						self.#searchBoxValue = group;
+						$inputBox.val(group);
+						closeDropdown();
+						const $groupNode = $hostNavigator.find(`[data-group_identifier='["${group.split('/').join('","')}"]']`);
+						processSelectedNode($groupNode, true);
+					});
+
+					$item.on('mouseenter', function() {
+						focusItem(displayIndex);
+					});
+
+					$dropdown.append($item);
+					displayIndex++;
+				}
+			});
+		};
+
+		// Search input focus tracking
+		$inputBox.on('focus', function() {
+			self.#inputHadFocus = true;
+		});
+
+		$inputBox.on('blur', function() {
+			self.#inputHadFocus = false;
+		});
+
+		// Search input handlers
+		$inputBox.on('input', function() {
+			const val = $(this).val();
+			self.#searchBoxValue = val;
+			const valLower = val.toLowerCase();
+
+			if (val === '') {
+				closeDropdown();
+				return;
+			}
+
+			populateDropdown(valLower);
+
+			if ($dropdown.children().length > 0) {
+				if (valLower.length > 0) {
+					openDropdown(true);
+				}
+				else {
+					openDropdown();
+				}
+			}
+			else {
+				closeDropdown();
+			}
+		});
+
+		// Search input keyboard navigation
+		$inputBox.on('keydown', function(e) {
+			const allItems = $dropdown.find('.autocomplete-item');
+
+			switch (e.key) {
+				case 'ArrowDown':
+					e.preventDefault();
+					if ($dropdown.is(':visible')) {
+						if (currentIndex < 0 && allItems.length > 0) {
+							focusItem(0);
+						}
+						$dropdown.focus();
+					}
+					else {
+						openDropdown();
+					}
+					break;
+				case 'ArrowUp':
+					e.preventDefault();
+					if ($dropdown.is(':visible')) {
+						if (allItems.length > 0) {
+							focusItem(allItems.length - 1);
+						}
+						$dropdown.focus();
+					}
+					else {
+						openDropdown();
+					}
+					break;
+				case 'Escape':
+					e.preventDefault();
+					closeDropdown();
+					$inputBox.val('');
+					self.#searchBoxValue = '';
+					populateDropdown();
+					break;
+				case 'Enter':
+					e.preventDefault();
+					const firstVisible = getFirstVisibleItem();
+					if (firstVisible) {
+						$(firstVisible).click();
+					}
+					break;
+			}
+		});
+
+		// Dropdown arrow click handler
+		$dropdownArrow.on('click', function(e) {
+			e.stopPropagation();
+			e.preventDefault();
+
+			if ($dropdown.is(':visible')) {
+				closeDropdown();
+			}
+			else {
+				populateDropdown();
+				openDropdown();
+			}
+		});
+
+		// Dropdown arrow keyboard handler
+		$dropdownArrow.on('keydown', function(e) {
+			switch (e.key) {
+				case ' ':
+				case 'Enter':
+					e.preventDefault();
+					if ($dropdown.is(':visible')) {
+						closeDropdown();
+					}
+					else {
+						populateDropdown();
+						openDropdown();
+					}
+					break;
+				case 'ArrowDown':
+					e.preventDefault();
+					populateDropdown();
+					openDropdown();
+					break;
+				case 'ArrowUp':
+					e.preventDefault();
+					populateDropdown();
+					openDropdown();
+					const allItems = $dropdown.find('.autocomplete-item');
+					if (allItems.length > 0) {
+						focusItem(allItems.length - 1);
+					}
+					break;
+				case 'Escape':
+					e.preventDefault();
+					closeDropdown();
+					break;
+			}
+		});
+
+		// Dropdown list keyboard navigation
+		$dropdown.on('keydown', function(e) {
+			const allItems = $dropdown.find('.autocomplete-item');
+
+			if (allItems.length === 0) return;
+
+			switch (e.key) {
+				case 'ArrowDown':
+					e.preventDefault();
+					let nextIndex = currentIndex + 1;
+					if (nextIndex >= allItems.length) {
+						nextIndex = 0;
+					}
+					focusItem(nextIndex);
+					break;
+				case 'ArrowUp':
+					e.preventDefault();
+					let prevIndex = currentIndex - 1;
+					if (prevIndex < 0) {
+						prevIndex = allItems.length - 1;
+					}
+					focusItem(prevIndex);
+					break;
+				case 'Enter':
+					e.preventDefault();
+					if (currentIndex >= 0 && currentIndex < allItems.length) {
+						$(allItems[currentIndex]).click();
+					}
+					break;
+				case 'Escape':
+					e.preventDefault();
+					closeDropdown();
+					$inputBox.focus();
+					break;
+				case 'Tab':
+					closeDropdown();
+					break;
+			}
+		});
+
+		// Store references for cleanup
+		this.autocompleteDropdown = $dropdown[0];
+		this.autocompleteInput = $inputBox[0];
+		this.autocompleteContainer = $autocompleteContainer[0];
 	}
 
 	hideDropdownHnav(e) {
 		if (!$(e.target).closest('.autocomplete-container').length) {
 			$('.autocomplete-dropdown').hide();
+			this._resumeUpdating();
 		}
 	}
 
@@ -564,7 +964,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 		const selectedItem = hostNavigator.querySelector('.nav-selected');
 		const parentElement = selectedItem?.closest('.navigation-tree-node-is-group');
 		const container = this._container.querySelector('.dashboard-grid-widget-contents');
-		const offset = 125;
+		const offset = 80;
 		if (selectedItem && parentElement) {
 			const containerRect = container.getBoundingClientRect();
 			const elementRect = parentElement.getBoundingClientRect();
@@ -597,7 +997,10 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 			if (infoDiv) {
 				infoDiv.classList.add('nav-hoverable');
 				infoDiv.addEventListener('click', (event) => {
-					if (!event.target.closest('button')) {
+					const isPrimaryClick = event.target.closest('.navigation-tree-node-info-primary span');
+					const isHelperClick = event.target.closest('button');
+
+					if (isPrimaryClick && !isHelperClick) {
 						event.stopPropagation();
 						this.hideGroupNodes();
 						this.#selected_groupid = groupID;
@@ -708,104 +1111,36 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 		}
 	}
 
+	onClearContents() {
+		if (this.#host_navigator !== null) {
+			this.#host_navigator.destroy();
+			this.#host_navigator = null;
+		}
 
-	addGroupNavigationStyling() {
-		if ($('style.autocomplete-input-styles').length === 0) {
-			const styleElement = document.createElement('style');
-			styleElement.classList.add('autocomplete-input-styles');
-			styleElement.textContent = `
-				:root {
-					--autocomplete-bg-dark: #2b2b2b;
-					--autocomplete-bg-light: #ffffff;
-					--autocomplete-color-dark: #ffffff;
-					--autocomplete-color-light: #000000;
-					--autocomplete-hover-dark: #383838;
-					--autocomplete-hover-lightk: #ccecfe;
-				}
-				.nav-hoverable {
-					cursor: pointer;
-				}
-				.nav-hoverable:hover {
-					background-color: rgba(241, 156, 71, 0.12);
-					border-radius: 6px;
-					transition: background-color 0.2s ease;
-				}
-				.nav-selected {
-					background: linear-gradient(to right, #3a506b, #5bc0be);
-					color: #fff;
-					border-radius: 6px;
-					padding: 4px 8px;
-					box-shadow: 0 0 8px rgba(52, 152, 219, 0.5);
-				}
-				.nav-selected:hover {
-					background-color: rgba(241, 156, 71, 0.12);
-					border-radius: 6px;
-					transition: background-color 0.2s ease;
-				}
-				.autocomplete-container {
-					display: inline-block;
-					width: 100%;
-					position: sticky;
-					box-sizing: border-box;
-					top: 0;
-					z-index: 10;
-					background: var(--autocomplete-bg);
-					padding: 6px 0;
-				}
-				.autocomplete-input {
-					width: calc(100% - 40px);
-					font-size: 12px;
-					padding-right: 10px;
-				}
-				.modified-chevron {
-					position: absolute;
-					right: 20px;
-					top: 50%;
-					transform: translateY(-50%);
-					cursor: pointer;
-				}
-				.autocomplete-dropdown {
-					border: 1px solid #ccc;
-					border-radius: 4px;
-					position: absolute;
-					top: 100%;
-					left: 0;
-					z-index: 1000;
-					background-color: var(--autocomplete-bg);
-					color: var(--autocomplete-color);
-					max-height: 300px;
-					overflow-y: auto;
-					font-size: 12px;
-					width: calc(100% - 40px);
-					display: none;
-				}
-				.autocomplete-item {
-					padding: 8px;
-					cursor: pointer;
-				}
-				.autocomplete-item:hover {
-					background-color: var(--autocomplete-hover);
-				}
-			`;
-			document.head.appendChild(styleElement);
+		if (this._autocompleteRepositionHandler) {
+			window.removeEventListener('scroll', this._autocompleteRepositionHandler, true);
+			window.removeEventListener('resize', this._autocompleteRepositionHandler, true);
+			this._autocompleteRepositionHandler = null;
+		}
 
-			var theme = jQuery('html').attr('theme');
-			const root = document.documentElement;
-			switch (theme) {
-				case 'dark-theme':
-				case 'hc-dark':
-					root.style.setProperty('--autocomplete-bg', 'var(--autocomplete-bg-dark)');
-					root.style.setProperty('--autocomplete-color', 'var(--autocomplete-color-dark)');
-					root.style.setProperty('--autocomplete-hover', 'var(--autocomplete-hover-dark)');
-					break;
-				case 'blue-theme':
-				case 'hc-light':
-				default:
-					root.style.setProperty('--autocomplete-bg', 'var(--autocomplete-bg-light)');
-					root.style.setProperty('--autocomplete-color', 'var(--autocomplete-color-light)');
-					root.style.setProperty('--autocomplete-hover', 'var(--autocomplete-hover-light)');
-					break;
-			}
+		if (this._autocompleteOutsideClickHandler) {
+			document.removeEventListener('click', this._autocompleteOutsideClickHandler);
+			this._autocompleteOutsideClickHandler = null;
+		}
+
+		if (this._autocompleteRafId) {
+			cancelAnimationFrame(this._autocompleteRafId);
+			this._autocompleteRafId = null;
+		}
+
+		if (this._autocompleteDragObserver) {
+			this._autocompleteDragObserver.disconnect();
+			this._autocompleteDragObserver = null;
+		}
+
+		if (this.autocompleteDropdown && this.autocompleteDropdown.parentNode) {
+			this.autocompleteDropdown.remove();
+			this.autocompleteDropdown = null;
 		}
 	}
 
