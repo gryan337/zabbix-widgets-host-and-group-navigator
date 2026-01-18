@@ -40,6 +40,7 @@
 		}
 	},
 	"assets": {
-		"js": ["class.hostandgroupnavigator.js", "class.widget.js", "class.widget-field.host-grouping.js"]
+		"js": ["class.hostandgroupnavigator.js", "class.widget.js", "class.widget-field.host-grouping.js"],
+		"css": ["widget.css"]
 	}
 }
