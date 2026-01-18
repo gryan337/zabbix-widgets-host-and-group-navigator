@@ -7,8 +7,8 @@
     --autocomplete-hover-light: #ccecfe;
     --span-hover-bg-dark: rgba(91, 192, 190, 0.2);
     --span-hover-color-dark: #5bc0be;
-    --span-hover-bg-light: rgba(58, 80, 107, 0.1);
-    --span-hover-color-light: #3a506b;
+    --span-hover-bg-light: rgba(91, 192, 190, 0.1);
+    --span-hover-color-light: #328382;
     --span-hover-bg-hc-dark: rgba(255, 255, 255, 0.2);
     --span-hover-color-hc-dark: #ffffff;
     --span-hover-bg-hc-light: rgba(0, 0, 0, 0.1);
@@ -84,7 +84,7 @@
     border: 1px solid #ccc;
     border-radius: 4px;
     position: fixed;
-    z-index: 99 !important;
+    z-index: 99;
     background-color: var(--autocomplete-bg);
     color: var(--autocomplete-color);
     max-height: 225px;

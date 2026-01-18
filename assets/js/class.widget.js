@@ -57,7 +57,6 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 
 	constructor(...args) {
 		super(...args);
-		this.boundHideDropdown = this.hideDropdownHnav.bind(this);
 	}
 
 	onActivate() {
@@ -425,11 +424,8 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 		return false;
 	}
 
-	onClearContents() {
-		if (this.#host_navigator !== null) {
-			this.#host_navigator.destroy();
-			this.#host_navigator = null;
-		}
+	onResize() {
+		this._closeDropdown();
 	}
 
 	hideGroupNodes() {
@@ -462,12 +458,6 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 			this.autocompleteDropdown.remove();
 		}
 
-		// Remove any orphaned dropdowns
-		const orphanedDropdowns = document.querySelectorAll('body > .autocomplete-dropdown[data-autocomplete-dropdown="true"]');
-		orphanedDropdowns.forEach(dropdown => dropdown.remove());
-
-		self.detachDropdownListeners();
-
 		const extractGroupIdentifiers = () => {
 			const groupIdentifiers = new Set();
 			$('[data-group_identifier]', $hostNavigator).each(function () {
@@ -482,13 +472,13 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 
 		const groupIdentifiers = extractGroupIdentifiers();
 
-		const $inputBox = $(`<input type="text" placeholder="Search for a group..." value="${self.#searchBoxValue}" class="autocomplete-input">`);
+		const $inputBox = $(`<input type="text" placeholder="Search for a host group..." value="${self.#searchBoxValue}" class="autocomplete-input">`);
 		$inputBox.attr({
 			'autocomplete': 'off',
 			'role': 'combobox',
 			'aria-autocomplete': 'list',
 			'aria-expanded': 'false',
-			'aria-controls': 'autocomplete-dropdown-' + self._uniqueid
+			'aria-controls': 'autocomplete-dropdown-' + self._widgetid
 		});
 
 		const $dropdownArrow = $('<div class="zi-chevron-down modified-chevron"></div>');
@@ -502,7 +492,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 		$dropdown.attr({
 			'data-autocomplete-dropdown': 'true',
 			'role': 'listbox',
-			'id': 'autocomplete-dropdown-' + self._uniqueid,
+			'id': 'autocomplete-dropdown-' + self._widgetid,
 			'tabindex': '-1'
 		});
 
@@ -567,6 +557,8 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 				self._resumeUpdating();
 			}, 10);
 		};
+
+		this._closeDropdown = closeDropdown;
 
 		// RAF-based repositioning
 		const rafPlace = () => {
@@ -931,21 +923,6 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 		this.autocompleteDropdown = $dropdown[0];
 		this.autocompleteInput = $inputBox[0];
 		this.autocompleteContainer = $autocompleteContainer[0];
-	}
-
-	hideDropdownHnav(e) {
-		if (!$(e.target).closest('.autocomplete-container').length) {
-			$('.autocomplete-dropdown').hide();
-			this._resumeUpdating();
-		}
-	}
-
-	attachDropdownListeners() {
-		$(document).on('click', this.boundHideDropdown);
-	}
-
-	detachDropdownListeners() {
-		$(document).off('click', this.boundHideDropdown);
 	}
 
 	setupScrollListener() {
