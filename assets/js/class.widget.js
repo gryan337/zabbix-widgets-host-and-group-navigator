@@ -515,8 +515,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 				'position': 'fixed',
 				'top': containerOffset.top + $autocompleteContainer.outerHeight() + 'px',
 				'left': containerOffset.left + 'px',
-				'width': (containerWidth - 40) + 'px',
-				'z-index': '1000'
+				'width': (containerWidth - 40) + 'px'
 			});
 		};
 
