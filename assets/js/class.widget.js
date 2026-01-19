@@ -57,6 +57,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 
 	constructor(...args) {
 		super(...args);
+		this._closeDropdown = () => {};
 	}
 
 	onActivate() {
@@ -425,7 +426,9 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 	}
 
 	onResize() {
-		this._closeDropdown();
+		if (this._closeDropdown) {
+			this._closeDropdown();
+		}
 	}
 
 	hideGroupNodes() {
@@ -444,9 +447,9 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 
 	initAutocomplete() {
 		const self = this;
-		const $container = $(this._container);
+		const $container = $(self._container);
 		const $hostNavigator = $container.find('.host-navigator');
-		const $widgetContents= $container.find('.dashboard-grid-widget-body');
+		const $widgetContents = $container.find('.dashboard-grid-widget-body');
 
 		const $oldContainer = $container.find('.autocomplete-container');
 		if ($oldContainer.length > 0) {
@@ -454,8 +457,8 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 		}
 
 		// Clean up existing dropdown if it exists
-		if (this.autocompleteDropdown && this.autocompleteDropdown.parentNode) {
-			this.autocompleteDropdown.remove();
+		if (self.autocompleteDropdown && self.autocompleteDropdown.parentNode) {
+			self.autocompleteDropdown.remove();
 		}
 
 		const extractGroupIdentifiers = () => {
@@ -497,7 +500,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 		});
 
 		const $autocompleteContainer = $('<div class="autocomplete-container"></div>').append($inputBox).append($dropdownArrow);
-		$autocompleteContainer.attr('data-autocomplete-widget', 'true');
+		$autocompleteContainer.attr('data-autocomplete-widget-' + self._widgetid, 'true');
 		$widgetContents.before($autocompleteContainer);
 
 		let currentIndex = -1;
@@ -534,11 +537,9 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 
 			if (index >= 0 && index < allItems.length) {
 				const itemToFocus = $(allItems[index]);
-				if (!itemToFocus.hasClass('hidden-by-search')) {
-					currentIndex = index;
-					itemToFocus.addClass('focused');
-					itemToFocus[0].scrollIntoView({ block: 'nearest' });
-				}
+				currentIndex = index;
+				itemToFocus.addClass('focused');
+				itemToFocus[0].scrollIntoView({ block: 'nearest' });
 			}
 		};
 
@@ -557,67 +558,67 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 			}, 10);
 		};
 
-		this._closeDropdown = closeDropdown;
+		self._closeDropdown = closeDropdown;
 
 		// RAF-based repositioning
 		const rafPlace = () => {
-			if (this._autocompleteRafId) {
-				cancelAnimationFrame(this._autocompleteRafId);
+			if (self._autocompleteRafId) {
+				cancelAnimationFrame(self._autocompleteRafId);
 			}
-			this._autocompleteRafId = requestAnimationFrame(() => {
+			self._autocompleteRafId = requestAnimationFrame(() => {
 				// Check if widget is being dragged
 				if (self._isDragging()) {
 					closeDropdown();
 					return;
 				}
 				positionDropdown();
-				this._autocompleteRafId = null;
+				self._autocompleteRafId = null;
 			});
 		};
 
 		// Setup reposition handlers
 		const setupRepositionHandlers = () => {
-			if (this._autocompleteRepositionHandler) {
-				window.removeEventListener('scroll', this._autocompleteRepositionHandler, true);
-				window.removeEventListener('resize', this._autocompleteRepositionHandler, true);
-				this._autocompleteRepositionHandler = null;
+			if (self._autocompleteRepositionHandler) {
+				window.removeEventListener('scroll', self._autocompleteRepositionHandler, true);
+				window.removeEventListener('resize', self._autocompleteRepositionHandler, true);
+				self._autocompleteRepositionHandler = null;
 			}
 
-			this._autocompleteRepositionHandler = () => {
+			self._autocompleteRepositionHandler = () => {
 				rafPlace();
 			};
 
-			window.addEventListener('scroll', this._autocompleteRepositionHandler, true);
-			window.addEventListener('resize', this._autocompleteRepositionHandler, true);
+			window.addEventListener('scroll', self._autocompleteRepositionHandler, true);
+			window.addEventListener('resize', self._autocompleteRepositionHandler, true);
 		};
 
 		// Cleanup reposition handlers
 		const cleanupRepositionHandlers = () => {
-			if (this._autocompleteRepositionHandler) {
-				window.removeEventListener('scroll', this._autocompleteRepositionHandler, true);
-				window.removeEventListener('resize', this._autocompleteRepositionHandler, true);
-				this._autocompleteRepositionHandler = null;
+			if (self._autocompleteRepositionHandler) {
+				window.removeEventListener('scroll', self._autocompleteRepositionHandler, true);
+				window.removeEventListener('resize', self._autocompleteRepositionHandler, true);
+				self._autocompleteRepositionHandler = null;
 			}
 
-			if (this._autocompleteRafId) {
-				cancelAnimationFrame(this._autocompleteRafId);
-				this._autocompleteRafId = null;
+			if (self._autocompleteRafId) {
+				cancelAnimationFrame(self._autocompleteRafId);
+				self._autocompleteRafId = null;
 			}
 		};
 
 		// Setup outside click handler
 		const setupOutsideClickHandler = () => {
-			if (this._autocompleteOutsideClickHandler) {
-				document.removeEventListener('click', this._autocompleteOutsideClickHandler);
-				this._autocompleteOutsideClickHandler = null;
+			if (self._autocompleteOutsideClickHandler) {
+				document.removeEventListener('click', self._autocompleteOutsideClickHandler);
+				self._autocompleteOutsideClickHandler = null;
 			}
 
-			this._autocompleteOutsideClickHandler = (e) => {
+			self._autocompleteOutsideClickHandler = (e) => {
 				let element = e.target;
 				let isOurDropdown = false;
 
 				while (element && element !== document) {
-					if (element.hasAttribute && (element.hasAttribute('data-autocomplete-widget') ||
+					if (element.hasAttribute && (element.hasAttribute('data-autocomplete-widget-' + self._widgetid) ||
 							element.hasAttribute('data-autocomplete-dropdown'))) {
 						isOurDropdown = true;
 						break;
@@ -631,15 +632,15 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 			};
 
 			setTimeout(() => {
-				document.addEventListener('click', this._autocompleteOutsideClickHandler);
+				document.addEventListener('click', self._autocompleteOutsideClickHandler);
 			}, 10);
 		};
 
 		// Cleanup outside click handler
 		const cleanupOutsideClickHandler = () => {
-			if (this._autocompleteOutsideClickHandler) {
-				document.removeEventListener('click', this._autocompleteOutsideClickHandler);
-				this._autocompleteOutsideClickHandler = null;
+			if (self._autocompleteOutsideClickHandler) {
+				document.removeEventListener('click', self._autocompleteOutsideClickHandler);
+				self._autocompleteOutsideClickHandler = null;
 			}
 		};
 
@@ -659,7 +660,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 			attributeFilter: ['class']
 		});
 
-		this._autocompleteDragObserver = dragObserver;
+		self._autocompleteDragObserver = dragObserver;
 
 		const openDropdown = (skipFocus = false) => {
 			self._pauseUpdating();
@@ -719,13 +720,13 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 			$dropdown.empty();
 			const searchRegex = filterTerm ? new RegExp(filterTerm.replace(/\*/g, '.*')) : null;
 
-			let displayIndex = 0; // Track the actual display index
+			let displayIndex = 0;
 			groupIdentifiers.forEach((group, originalIndex) => {
 				if (!searchRegex || searchRegex.test(group.toLowerCase())) {
 					const $item = $('<div class="autocomplete-item"></div>').text(group);
 					$item.attr({
 						'role': 'option',
-						'data-index': displayIndex, // Use displayIndex instead of originalIndex
+						'data-index': displayIndex,
 						'data-text': group.toLowerCase()
 					});
 
@@ -919,9 +920,9 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 		});
 
 		// Store references for cleanup
-		this.autocompleteDropdown = $dropdown[0];
-		this.autocompleteInput = $inputBox[0];
-		this.autocompleteContainer = $autocompleteContainer[0];
+		self.autocompleteDropdown = $dropdown[0];
+		self.autocompleteInput = $inputBox[0];
+		self.autocompleteContainer = $autocompleteContainer[0];
 	}
 
 	setupScrollListener() {
