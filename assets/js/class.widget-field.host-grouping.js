@@ -1,30 +1,37 @@
 
-
-class CWidgetFieldHostGrouping extends CWidgetField {
+class CWidgetFieldHostGroupingRME {
 
 	static GROUP_BY_TAG_VALUE = 1;
 
 	/**
-	 * @type {HTMLTableElement}
+	 * @type {HTMLTableElement};
 	 */
 	#table;
 
 	/**
-	 * @type {Array}
+	 * @type {string};
 	 */
-	#value;
+	#field_name;
 
 	/**
-	 * @type {number}
+	 * @type {Array};
+	 */
+	#field_value;
+
+	/**
+	 * type {number};
 	 */
 	#max_rows;
 
-	constructor({name, form_name, value, max_rows}) {
-		super({name, form_name});
-
-		this.#value = value;
+	constructor({
+		field_name,
+		field_value,
+		max_rows
+	}) {
+		this.#field_name = field_name;
+		this.#field_value = field_value;
 		this.#max_rows = max_rows;
-		this.#table = document.getElementById(`${name}-table`);
+		this.#table = document.getElementById(`${field_name}-table`);
 
 		this.#initField();
 		this.#update();
@@ -33,9 +40,9 @@ class CWidgetFieldHostGrouping extends CWidgetField {
 	#initField() {
 		jQuery(this.#table)
 			.dynamicRows({
-				template: `#${this.getName()}-row-tmpl`,
+				template: `#${this.#field_name}-row-tmpl`,
 				allow_empty: true,
-				rows: this.#value,
+				rows: this.#field_value,
 				sortable: true,
 				sortable_options: {
 					target: 'tbody',
@@ -43,29 +50,21 @@ class CWidgetFieldHostGrouping extends CWidgetField {
 					freeze_end: 1
 				}
 			})
-			.on('afteradd.dynamicRows, tableupdate.dynamicRows', () => {
-				this.#update();
-				this.dispatchUpdateEvent();
-			});
+			.on('afteradd.dynamicRows, tableupdate.dynamicRows', () => this.#update());
 
-		this.#table.addEventListener('input', () => this.dispatchUpdateEvent());
-		this.#table.addEventListener('change', () => {
-			this.#update();
-			this.dispatchUpdateEvent();
-		});
+		this.#table.addEventListener('change', () => this.#update());
 	}
 
 	#update() {
 		const rows = this.#table.querySelectorAll('.form_row');
 
 		rows.forEach((row, index) => {
-			for (const field of row.querySelectorAll(`[name^="${this.getName()}["]`)) {
+			for (const field of row.querySelectorAll(`[name^="${this.#field_name}["]`)) {
 				field.name = field.name.replace(/\[\d+]/g, `[${index}]`);
 			}
 
-			const is_tag_value = row.querySelector('[name$="[attribute]"]').value
-				== CWidgetFieldHostGrouping.GROUP_BY_TAG_VALUE;
-
+			const is_tag_value = row
+				.querySelector('[name$="[attribute]"]').value == CWidgetFieldHostGroupingRME.GROUP_BY_TAG_VALUE;
 			const tag_name_input = row.querySelector('input[name$="[tag_name]"]');
 
 			tag_name_input.style.display = is_tag_value ? '' : 'none';
