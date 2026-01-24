@@ -1,6 +1,5 @@
 
-
-class CWidgetFieldHostAndHgGrouping {
+class CWidgetFieldHostGroupingRME {
 
 	static GROUP_BY_TAG_VALUE = 1;
 
@@ -65,7 +64,7 @@ class CWidgetFieldHostAndHgGrouping {
 			}
 
 			const is_tag_value = row
-				.querySelector('[name$="[attribute]"]').value == CWidgetFieldHostAndHgGrouping.GROUP_BY_TAG_VALUE;
+				.querySelector('[name$="[attribute]"]').value == CWidgetFieldHostGroupingRME.GROUP_BY_TAG_VALUE;
 			const tag_name_input = row.querySelector('input[name$="[tag_name]"]');
 
 			tag_name_input.style.display = is_tag_value ? '' : 'none';

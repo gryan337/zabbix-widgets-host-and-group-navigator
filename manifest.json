@@ -5,7 +5,7 @@
 	"name": "RME Host And Hostgroup Navigator",
 	"namespace": "HostAndGroupNavigator",
 	"version": "1.0",
-	"author": "Ryan Eberly",
+	"author": "RME",
 	"description": "Displays host group hierarchy and allows for controlling other widgets with either hostgroup or host selections",
 	"widget": {
 		"size": {
@@ -40,6 +40,7 @@
 		}
 	},
 	"assets": {
-		"js": ["class.hostandgroupnavigator.js", "class.widget.js", "class.widget-field.host-grouping.js"]
+		"js": ["class.hostandgroupnavigator.js", "class.widget.js", "class.widget-field.host-grouping.js"],
+		"css": ["widget.css"]
 	}
 }
