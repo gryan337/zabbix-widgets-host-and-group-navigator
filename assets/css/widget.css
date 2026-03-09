@@ -19,13 +19,17 @@
     cursor: pointer;
     padding: 2px 4px;
     border-radius: 4px;
-    transition: all 0.2s ease;
 }
 
 .nav-hoverable .navigation-tree-node-info-primary span:hover {
     background-color: var(--span-hover-bg);
     color: var(--span-hover-color);
     text-decoration: underline;
+}
+
+.nav-hoverable .navigation-tree-node-info-primary span:focus-visible {
+    box-shadow: 0 0 0 2px var(--nav-group-focus);
+    outline: none;
 }
 
 .nav-selected {
@@ -107,12 +111,64 @@
     background-color: var(--autocomplete-hover);
 }
 
+.waiting {
+    cursor: wait !important;
+    animation: shake 0.3s;
+}
+
+@keyframes shake {
+    0% { transform: translateX(0px); }
+    25%  { transform: translateX(-3px); }
+    50%  { transform: translateX(3px); }
+    75%  { transform: translateX(-3px); }
+    100%  { transform: translateX(0px); }
+}
+
+.tooltip-warning {
+    position: absolute;
+    background: #7b1fa2;
+    color: #fff;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    max-width: 500px;
+    flex-wrap: nowrap;
+    whitespace: normal;
+    word-break:  break-word;
+}
+
+.tooltip-warning.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.tooltip-warning.svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.tooltip-text {
+    white-space: pre-line;
+    flex: 1;
+}
+
 [theme="dark-theme"] {
     --autocomplete-bg: var(--autocomplete-bg-dark);
     --autocomplete-color: var(--autocomplete-color-dark);
     --autocomplete-hover: var(--autocomplete-hover-dark);
     --span-hover-bg: var(--span-hover-bg-dark);
     --span-hover-color: var(--span-hover-color-dark);
+    --nav-group-focus: rgba(30, 135, 227, 0.35);
 }
 
 [theme="hc-dark"] {
@@ -121,6 +177,7 @@
     --autocomplete-hover: var(--autocomplete-hover-dark);
     --span-hover-bg: var(--span-hover-bg-hc-dark);
     --span-hover-color: var(--span-hover-color-hc-dark);
+    --nav-group-focus: #ffffff;
 }
 
 [theme="blue-theme"] {
@@ -129,6 +186,7 @@
     --autocomplete-hover: var(--autocomplete-hover-light);
     --span-hover-bg: var(--span-hover-bg-light);
     --span-hover-color: var(--span-hover-color-light);
+    --nav-group-focus: rgba(30, 135, 227, 0.35);
 }
 
 [theme="hc-light"] {
@@ -137,4 +195,5 @@
     --autocomplete-hover: var(--autocomplete-hover-light);
     --span-hover-bg: var(--span-hover-bg-hc-light);
     --span-hover-color: var(--span-hover-color-hc-light);
+    --nav-group-focus: #111111;
 }
