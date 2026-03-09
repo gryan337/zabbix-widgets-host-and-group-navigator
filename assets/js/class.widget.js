@@ -139,6 +139,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 			this.refreshTree();
 		}
 
+		this.#setupTreeKeyboardNavigation();
 		let references = this.getReferenceFromCookie("references");
 		this.#refInHosts = false;
 
@@ -353,6 +354,79 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 		if (this.#selected_hostid !== null) {
 			this.#host_navigator.selectItem(this.#selected_hostid);
 		}
+	}
+
+	#setupTreeKeyboardNavigation() {
+		const container = this._container.querySelector('.host-navigator');
+		if (!container) return;
+
+		if (this._treeKeydownHandler) {
+			container.removeEventListener('keydown', this._treeKeydownHandler);
+		}
+
+		this._treeKeydownHandler = (event) => {
+			const currentSpan = event.target.closest('.navigation-tree-node-info-name');
+			if (!currentSpan) return;
+
+			const allSpans = Array.from(
+				container.querySelectorAll('.navigation-tree-node-info-name[tabindex="0"]')
+			).filter(s => s.offsetParent !== null);
+
+			const currentIndex = allSpans.indexOf(currentSpan);
+
+			switch (event.key) {
+				case 'ArrowDown': {
+					event.preventDefault();
+					const next = allSpans[currentIndex + 1];
+					if (next) next.focus();
+					break;
+				}
+				case 'ArrowUp': {
+					event.preventDefault();
+					const prev = allSpans[currentIndex - 1];
+					if (prev) prev.focus();
+					break;
+				}
+				case 'Home': {
+					event.preventDefault();
+					if (allSpans.length > 0) allSpans[0].focus();
+					break;
+				}
+				case 'End': {
+					event.preventDefault();
+					if (allSpans.length > 0) allSpans[allSpans.length - 1].focus();
+					break;
+				}
+				case 'ArrowRight': {
+					event.preventDefault();
+					const groupNode = currentSpan.closest('.navigation-tree-node-is-group');
+					if (groupNode && !groupNode.classList.contains('navigation-tree-node-is-open')) {
+						const arrow = groupNode.querySelector('.navigation-tree-node-info-arrow span');
+						if (arrow) arrow.click();
+					}
+					break;
+				}
+				case 'ArrowLeft': {
+					event.preventDefault();
+					const groupNode = currentSpan.closest('.navigation-tree-node-is-group');
+					if (groupNode && groupNode.classList.contains('navigation-tree-node-is-open')) {
+						const arrow = groupNode.querySelector('.navigation-tree-node-info-arrow span');
+						if (arrow) arrow.click();
+					}
+					else {
+						const parentChildren = currentSpan.closest('.navigation-tree-node-children');
+						if (parentChildren) {
+							const parentSpan = parentChildren.parentElement
+								?.querySelector(':scope > .navigation-tree-node-info .navigation-tree-node-info-name');
+							if (parentSpan) parentSpan.focus();
+						}
+					}
+					break;
+				}
+			}
+		};
+
+		container.addEventListener('keydown', this._treeKeydownHandler);
 	}
 
 	#registerListeners() {
@@ -731,6 +805,18 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 					});
 
 					$item.on('click', function(e) {
+						if (document.querySelector('.is-loading') !== null) {
+							$dropdown.addClass('waiting');
+							setTimeout(() => $dropdown.removeClass('waiting'), 500);
+							self.showTooltip(
+								$dropdown[0],
+								'Previous request has not finished. Please wait...<br>' +
+								'A previous request is complete when all widgets stop showing the CSS spinner.<br>' +
+								'You can continue to expand levels of the tree by clicking the triangle key.'
+							);
+							return;
+						}
+
 						e.stopPropagation();
 						self.#searchBoxValue = group;
 						$inputBox.val(group);
@@ -973,12 +1059,37 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 			const infoDiv = node.querySelector('.navigation-tree-node-info');
 			if (infoDiv) {
 				infoDiv.classList.add('nav-hoverable');
+
+				const nameSpan = infoDiv.querySelector('.navigation-tree-node-info-name');
+				if (nameSpan) {
+					nameSpan.setAttribute('tabindex', '0');
+
+					nameSpan.addEventListener('keydown', (event) => {
+						if (event.key !== 'Enter' && event.key !== ' ') return;
+						event.preventDefault();
+						event.stopPropagation();
+						nameSpan.click();
+					});
+				}
+
 				infoDiv.addEventListener('click', (event) => {
 					const isPrimaryClick = event.target.closest('.navigation-tree-node-info-primary span');
 					const isHelperClick = event.target.closest('button');
 
 					if (isPrimaryClick && !isHelperClick) {
 						event.stopPropagation();
+						if (document.querySelector('.is-loading') !== null) {
+							infoDiv.classList.add('waiting');
+							setTimeout(() => infoDiv.classList.remove('waiting'), 500);
+							this.showTooltip(
+								infoDiv,
+								'Previous request has not finished. Please wait...<br>' +
+								'A previous request is complete when all widgets stop showing the CSS spinner.<br>' +
+								'You can continue to expand levels of the tree by clicking the triangle key.'
+							);
+							return;
+						}
+
 						this.hideGroupNodes();
 						this.#selected_groupid = groupID;
 						this.markSelected(infoDiv);
@@ -988,6 +1099,34 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 				});
 			}
 		});
+	}
+
+	showTooltip(target, message) {
+		document.querySelectorAll('.tooltip-warning').forEach(el => el.remove());
+
+		const tooltip = document.createElement('div');
+		tooltip.className = 'tooltip-warning';
+
+		tooltip.innerHTML = `
+			<svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<polygon points="12,2 22,22 2,22" fill="#FFD54F"/>
+				<text x="12" y="18" font-size="14" text-anchor="middle" fill="#000">!</text>
+			</svg>
+			<div class="tooltip-text">${message}</div>
+		`;
+
+		document.body.appendChild(tooltip);
+
+		const rect = target.getBoundingClientRect();
+		tooltip.style.top = rect.top + window.scrollY - tooltip.offsetHeight - 8 + "px";
+		tooltip.style.left = rect.left + window.scrollX + rect.width / 2 - tooltip.offsetWidth / 2 + "px";
+
+		requestAnimationFrame(() => tooltip.classList.add('show'));
+
+		setTimeout(() => {
+			tooltip.classList.remove('show');
+			tooltip.addEventListener('transitioned', () => tooltip.remove(), { once: true });
+		}, 3000);
 	}
 
 	markSelected(node) {
@@ -1118,6 +1257,14 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 		if (this.autocompleteDropdown && this.autocompleteDropdown.parentNode) {
 			this.autocompleteDropdown.remove();
 			this.autocompleteDropdown = null;
+		}
+
+		if (this._treeKeydownHandler) {
+			const container = this._container?.querySelector('.host-navigator');
+			if (container) {
+				container.removeEventListener('keydown', this._treeKeydownHandler);
+			}
+			this._treeKeydownHandler = null;
 		}
 	}
 
