@@ -54,6 +54,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 
 	#searchBoxValue = '';
 	#inputHadFocus = false;
+	#focusedNodeIdentifier = null;
 
 	constructor(...args) {
 		super(...args);
@@ -73,6 +74,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 	}
 
 	getUpdateRequestData() {
+		this.#saveFocusedNode();
 		return {
 			...super.getUpdateRequestData(),
 			with_config: this.#host_navigator === null ? 1 : undefined
@@ -228,6 +230,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 			}
 		}
 
+		this.#restoreFocusedNode();
 		this.scrollToSelection();
 
 		const autocompleteInput = this._container.querySelector('.autocomplete-input');
@@ -353,6 +356,35 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 
 		if (this.#selected_hostid !== null) {
 			this.#host_navigator.selectItem(this.#selected_hostid);
+		}
+	}
+
+	#saveFocusedNode() {
+		const focused = document.activeElement;
+		if (!focused || !this._container.contains(focused)) return;
+
+		const nameSpan = focused.closest('.navigation-tree-node-info-name');
+		if (!nameSpan) return;
+
+		// Use the group identifier as a stable key across refreshes
+		const groupNode = nameSpan.closest('[data-group_identifier]');
+		if (groupNode) {
+			this.#focusedNodeIdentifier = groupNode.getAttribute('data-group_identifier');
+		}
+	}
+
+	#restoreFocusedNode() {
+		if (!this.#focusedNodeIdentifier) return;
+
+		const node = this._container.querySelector(
+			`[data-group_identifier='${CSS.escape(this.#focusedNodeIdentifier)}']`
+		);
+
+		if (node) {
+			const nameSpan = node.querySelector('.navigation-tree-node-info-name');
+			if (nameSpan) {
+				requestAnimationFrame(() => nameSpan.focus());
+			}
 		}
 	}
 
