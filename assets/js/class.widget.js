@@ -10,6 +10,11 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 	#host_navigator = null;
 
 	/**
+	 * @type {Array}
+	 */
+	#hosts = [];
+
+	/**
 	 * Listeners of host navigator widget.
 	 *
 	 * @type {Object}
@@ -46,7 +51,6 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 
 	#refInHosts = false;
 	#group_cookie_set = false;
-	#original_hostid = null;
 
 	#isSelectingText = false;
 	#scrollTop = 0;
@@ -55,6 +59,9 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 	#searchBoxValue = '';
 	#inputHadFocus = false;
 	#focusedNodeIdentifier = null;
+
+	#host_manually_selected = false;
+	#group_manually_selected = false;
 
 	constructor(...args) {
 		super(...args);
@@ -106,6 +113,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 		}
 
 		this.#csrf_token = response[CSRF_TOKEN_NAME];
+		this.#hosts = response.hosts;
 
 		if (this.#host_navigator === null) {
 			this.clearContents();
@@ -193,12 +201,13 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 			}
 		}
 
-		if (!this.hasEverUpdated()) {
-			this.#original_hostid = this.#selected_hostid;
-		}
-
 		if (!this._fields.no_select_first_entry) {
-			if ((!this.hasEverUpdated() || (this.hasEverUpdated() && this.#original_hostid === null)) && this.isReferred()) {
+			if (this.isReferred() &&
+				(
+					(this.isFieldsReferredDataUpdated() || !this.hasEverUpdated()) || 
+					(this.hasEverUpdated() && !this.#host_manually_selected && this.#selected_hostid === null)
+				)
+			) {
 				if (!this.#refInHosts) {
 					this.#selected_hostid = this.#getDefaultSelectable();
 				}
@@ -211,20 +220,20 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 				}
 			}
 
-			if (!this._fields.host_groups_only && this.#selected_hostid !== null) {
+			if (!this._fields.host_groups_only && this.#host_manually_selected) {
 				this.#host_navigator.selectItem(this.#selected_hostid);
 			}
 		}
 		else {
 			if (this.hasEverUpdated()) {
-				if (this.#selected_groupid !== null) {
+				if (this.#group_manually_selected && this.#selected_groupid !== null) {
 					if (this._fields.group_by?.[0]?.attribute === 0) {
 						this.hideGroupNodes();
 						this.selectAndHighlightNodes();
 					}
 				}
 
-				if (!this._fields.host_groups_only && (this.#selected_hostid !== this.#original_hostid)) {
+				if (!this._fields.host_groups_only && this.#host_manually_selected) {
 					this.#host_navigator.selectItem(this.#selected_hostid);
 				}
 			}
@@ -347,6 +356,10 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 		return selected_element !== null ? selected_element.dataset.id : null;
 	}
 
+	#hasSelectable() {
+		return this.#hosts.some(host => host.id === this.#selected_hostid);
+	}
+
 	onReferredUpdate() {
 		if (this.#host_navigator === null || this.#selected_hostid !== null) {
 			return;
@@ -465,7 +478,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 		this.#listeners = {
 			hostSelect: ({detail}) => {
 				this.#selected_hostid = detail.hostid;
-
+				this.#host_manually_selected = true;
 				this.#broadcast();
 			},
 
@@ -1170,6 +1183,7 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 			this._container.querySelectorAll('.nav-selected').forEach(el => el.classList.remove('nav-selected'));
 			node.classList.add('nav-selected');
 		}
+		this.#group_manually_selected = true;
 		this.#broadcastGroup();
 	}
 
