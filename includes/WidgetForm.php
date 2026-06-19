@@ -37,6 +37,7 @@ class WidgetForm extends CWidgetForm {
 	private const LINES_MIN = 1;
 	private const LINES_MAX = 50000;
 	private const LINES_DEFAULT = 100;
+	private const GROUP_LINES_DEFAULT = 0;
 
 	public function addFields(): self {
 		return $this
@@ -92,6 +93,12 @@ class WidgetForm extends CWidgetForm {
 			->addField(
 				new CWidgetFieldCheckBox('host_groups_only', _('Show host groups only'))
 			)
+			->addField($this->isTemplateDashboard()
+				? null
+				: (new CWidgetFieldIntegerBox('show_lines_groups', _('Host group limit'), self::LINES_MIN, self::LINES_MAX))
+					->setDefault(self::GROUP_LINES_DEFAULT)
+					->setFlags(CWidgetField::FLAG_NOT_EMPTY | CWidgetField::FLAG_LABEL_ASTERISK)
+			)
 			->addField(
 				(new CWidgetFieldRadioButtonList('problems', _('Show problems'), [
 					self::PROBLEMS_ALL => _('All'),
@@ -113,8 +120,30 @@ class WidgetForm extends CWidgetForm {
 			);
 	}
 
+	public function setFieldsValues(): self {
+		parent::setFieldsValues();
+
+		if ($this->getField('host_groups_only')->getValue()
+				&& $this->getField('show_lines_groups')->getValue() == self::GROUP_LINES_DEFAULT) {
+			$this->getField('show_lines_groups')->setValue(
+				$this->getField('show_lines')->getValue()
+			);
+		}
+
+		return $this;
+	}
+
 	public function validate(bool $strict = false): array {
 		$errors = parent::validate($strict);
+
+		if (!$this->getField('host_groups_only')->getValue()) {
+			$errors = array_values(
+				array_filter($errors, static fn($error) =>
+					strpos($error, '"Host group limit": value must be one of') === false
+				)
+			);
+		}
+
 		if ($errors) {
 			return $errors;
 		}

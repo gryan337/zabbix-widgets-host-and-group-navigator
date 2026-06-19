@@ -87,14 +87,29 @@ $form
 				])
 			)
 	)
+	->addField(array_key_exists('show_lines_groups', $data['fields'])
+		? (new CWidgetFieldIntegerBoxView($data['fields']['show_lines_groups']))
+			->addRowClass('field-host-group-limit')
+			->setFieldHint(
+				makeHelpIcon([
+					_('Only host groups with hosts will count toward the limit')
+				])
+			)
+		: null
+	)
 	->addField(
 		new CWidgetFieldRadioButtonListView($data['fields']['problems'])
 	)
 	->addField(
-		new CWidgetFieldHostGroupingView($data['fields']['group_by'])
+		(new CWidgetFieldHostGroupingView($data['fields']['group_by']))
+			->addRowClass('field-group-by')
 	)
 	->addField(array_key_exists('show_lines', $data['fields'])
-		? new CWidgetFieldIntegerBoxView($data['fields']['show_lines'])
+		? (new CWidgetFieldIntegerBoxView($data['fields']['show_lines']))->addRowClass('field-host-limit')
 		: null
 	)
+	->includeJsFile('widget.edit.js.php')
+	->initFormJs('widget_hostandgroupnavigator_form.init('.json_encode([
+		'templateid' => $data['templateid']
+	], JSON_THROW_ON_ERROR).');')
 	->show();

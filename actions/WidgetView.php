@@ -123,7 +123,7 @@ class WidgetView extends CControllerDashboardWidgetView {
 			}
 
 			// Get additional info for narrowed down hosts and filter them by status and maintenance status.
-			$hosts = API::Host()->get([
+			$host_query_params = [
 				'output' => $output,
 				'hostids' => array_keys($hosts),
 				'filter' => [
@@ -132,12 +132,21 @@ class WidgetView extends CControllerDashboardWidgetView {
 						: $this->fields_values['status'],
 					'maintenance_status' => $is_show_in_maintenance_on ? null : HOST_MAINTENANCE_STATUS_OFF
 				],
-				'selectHostGroups' => $group_by_host_groups ? ['groupid', 'name'] : null,
+				'selectHostGroups' => ($group_by_host_groups || $this->fields_values['host_groups_only'])
+					? ['groupid', 'name']
+					: null,
 				'selectTags' => $tags_to_keep ? ['tag', 'value'] : null,
-				'sortfield' => 'name',
-				// Request more than the set limit to distinguish if there are even more hosts available.
-				'limit' => $this->fields_values['show_lines'] + 1
-			]);
+				'sortfield' => 'name'
+			];
+
+			// When grouping by host groups only, we need all hosts to accurately count unique
+			// groups before applying the group-level limit. Otherwise, cap at show_lines + 1
+			// so we can detect if the host limit is exceeded.
+			if (!$this->fields_values['host_groups_only']) {
+				$host_query_params['limit'] = $this->fields_values['show_lines'] + 1;
+			}
+
+			$hosts = API::Host()->get($host_query_params);
 		}
 		elseif ($override_hostid !== '') {
 			$hosts = API::Host()->get([
@@ -229,11 +238,85 @@ class WidgetView extends CControllerDashboardWidgetView {
 		}
 
 		$is_limit_exceeded = false;
+		$group_count = null;
 
-		if (!$this->isTemplateDashboard() && count($hosts) > $this->fields_values['show_lines']) {
-			$is_limit_exceeded = true;
+		if (!$this->isTemplateDashboard()) {
+			if ($this->fields_values['host_groups_only']) {
+				// Count unique groups from direct host memberships only.
+				// extra_groups are tree display scaffolding and must not affect the limit.
+				$unique_groupids = [];
 
-			array_pop($hosts);
+				foreach ($hosts as $host) {
+					foreach ($host['hostgroups'] ?? [] as $group) {
+						if ($groupids === null || in_array($group['groupid'], $groupids)) {
+							$unique_groupids[$group['groupid']] = true;
+						}
+					}
+				}
+
+				$group_limit = $this->fields_values['show_lines_groups'];
+
+				if (count($unique_groupids) > $group_limit) {
+					$is_limit_exceeded = true;
+					$group_count = $group_limit;
+
+					// Build a deduplicated, name-sorted map of direct-membership groups only,
+					// then slice to the allowed limit to determine which groups survive.
+					$all_visible_groups = [];
+
+					foreach ($hosts as $host) {
+						foreach ($host['hostgroups'] ?? [] as $group) {
+							if ($groupids === null || in_array($group['groupid'], $groupids)) {
+								$all_visible_groups[$group['groupid']] = $group;
+							}
+						}
+					}
+
+					usort($all_visible_groups, static fn($a, $b) => strcmp($a['name'], $b['name']));
+
+					$kept_groupids = array_flip(
+						array_column(array_slice($all_visible_groups, 0, $group_limit), 'groupid')
+					);
+
+					// Drop hosts that have no direct membership in any kept group.
+					$hosts = array_values(
+						array_filter($hosts, static function(array $host) use ($kept_groupids): bool {
+							foreach ($host['hostgroups'] ?? [] as $group) {
+								if (isset($kept_groupids[$group['groupid']])) {
+									return true;
+								}
+							}
+
+							return false;
+						})
+					);
+
+					// Trim each host's direct memberships to only kept groups, then rebuild
+					// extra_groups from scratch so parent hierarchy nodes aren't orphaned.
+					foreach ($hosts as &$host) {
+						$host['hostgroups'] = array_values(
+							array_filter($host['hostgroups'] ?? [], static fn($g) => isset($kept_groupids[$g['groupid']]))
+						);
+
+						$extra_groups = [];
+
+						foreach ($host['hostgroups'] as $hostgroup) {
+							foreach ($all_hostgroups as $group) {
+								if ($this->containsSubstring($hostgroup['name'], $group['name'])) {
+									$extra_groups[$group['groupid']] = $group;
+								}
+							}
+						}
+
+						$host['extra_groups'] = array_values($extra_groups);
+					}
+					unset($host);
+				}
+			}
+			elseif (count($hosts) > $this->fields_values['show_lines']) {
+				$is_limit_exceeded = true;
+				array_pop($hosts);
+			}
 		}
 
 		if ($group_by_severity) {
@@ -332,7 +415,8 @@ class WidgetView extends CControllerDashboardWidgetView {
 		return [
 			'hosts' => $hosts,
 			'is_limit_exceeded' => $is_limit_exceeded,
-			'maintenances' => $maintenances
+			'maintenances' => $maintenances,
+			'group_count' => $group_count
 		];
 	}
 
@@ -369,7 +453,8 @@ class WidgetView extends CControllerDashboardWidgetView {
 			'group_by' => $this->fields_values['group_by'],
 			'open_groups' => $open_groups,
 			'show_problems' => $this->fields_values['problems'] != WidgetForm::PROBLEMS_NONE,
-			'severities' => $severities
+			'severities' => $severities,
+			'host_groups_only' => $this->fields_values['host_groups_only']
 		];
 	}
 
