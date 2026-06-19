@@ -140,7 +140,8 @@ class CWidgetHostAndGroupNavigator extends CWidget {
 			hosts: response.hosts,
 			maintenances: response.maintenances,
 			is_limit_exceeded: response.is_limit_exceeded,
-			selected_hostid: this.#selected_hostid
+			selected_hostid: this.#selected_hostid,
+			group_count: response.group_count
 		});
 
 		if (this._fields.group_by?.[0]?.attribute === 0) {
