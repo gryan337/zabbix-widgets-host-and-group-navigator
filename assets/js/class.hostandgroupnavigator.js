@@ -74,7 +74,7 @@ class CHostAndGroupNavigator {
 	 * @param {boolean}     is_limit_exceeded  Whether host limit is exceeded or not.
 	 * @param {string|null} selected_hostid    ID of selected host
 	 */
-	setValue({hosts, maintenances, is_limit_exceeded, selected_hostid}) {
+	setValue({hosts, maintenances, is_limit_exceeded, selected_hostid, group_count}) {
 		if (this.#container !== null) {
 			this.#reset();
 		}
@@ -94,7 +94,7 @@ class CHostAndGroupNavigator {
 		this.#container.appendChild(this.#navigation_tree.getContainer());
 
 		if (is_limit_exceeded) {
-			this.#createLimit(hosts.length);
+			this.#createLimit(this.#config.host_groups_only ? group_count : hosts.length);
 		}
 
 		this.#activateListeners();
@@ -472,7 +472,10 @@ class CHostAndGroupNavigator {
 	#createLimit(limit) {
 		const element = document.createElement('div');
 		element.classList.add(CHostAndGroupNavigator.ZBX_STYLE_LIMIT);
-		element.innerText = t('%1$d of %1$d+ hosts are shown').replaceAll('%1$d', limit.toString());
+
+		element.innerText = this.#config.host_groups_only
+			? t('%1$d of %1$d+ host groups are shown').replaceAll('%1$d', limit.toString())
+			: t('%1$d of %1$d+ hosts are shown').replaceAll('%1$d', limit.toString());
 
 		this.#container.appendChild(element);
 	}
