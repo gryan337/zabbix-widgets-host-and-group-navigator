@@ -4,7 +4,7 @@ use Modules\HostAndGroupNavigator\Includes\WidgetForm;
 
 ?>
 
-window.widget_hostandgroupnavigator_form = new class extends CWidgetForm {
+window.widget_hostandgroupnavigator_form = new class {
 
 	/**
 	 * Widget form.
@@ -34,7 +34,7 @@ window.widget_hostandgroupnavigator_form = new class extends CWidgetForm {
 
 
 	init({templateid}) {
-		this.#form = this.getForm();
+		this.#form = document.getElementById('widget-dialogue-form');
 		this.#updateForm();
 
 		this.#form.querySelector('#host_groups_only').addEventListener('change', () => {
@@ -96,7 +96,6 @@ window.widget_hostandgroupnavigator_form = new class extends CWidgetForm {
 		});
 
 		this.#form.addEventListener('change', () => this.#updateForm());
-		this.ready();
 	}
 
 	/**

@@ -109,7 +109,7 @@ $form
 		: null
 	)
 	->includeJsFile('widget.edit.js.php')
-	->initFormJs('widget_hostandgroupnavigator_form.init('.json_encode([
+	->addJavaScript('widget_hostandgroupnavigator_form.init('.json_encode([
 		'templateid' => $data['templateid']
 	], JSON_THROW_ON_ERROR).');')
 	->show();
